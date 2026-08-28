@@ -1,0 +1,50 @@
+[project]
+name = "psg-tracker"
+version = "0.1.0"
+description = "Live Sports Tracker & xG Analytics for Paris Saint-Germain"
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = [
+    "duckdb>=1.0.0",
+    "pandas>=2.2.0",
+    "requests>=2.31.0",
+    "pydantic>=2.6.0",
+    "pydantic-settings>=2.2.0",
+    "xgboost>=2.0.0",
+    "shap>=0.45.0",
+    "scikit-learn>=1.4.0",
+    "streamlit>=1.32.0",
+    "plotly>=5.19.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.3.0",
+    "mypy>=1.9.0",
+    "types-requests",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
