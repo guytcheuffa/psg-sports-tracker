@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import duckdb
 
@@ -22,7 +23,7 @@ class DuckDBManager:
         """Execute un script SQL (DDL ou transformations) sur la base."""
         raise NotImplementedError
 
-    def insert_shots(self, shots: list[dict]) -> None:
+    def insert_shots(self, shots: list[dict[str, Any]]) -> None:
         """Insere une liste de tirs dans la table `shots`."""
         raise NotImplementedError
 

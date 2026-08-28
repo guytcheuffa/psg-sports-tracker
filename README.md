@@ -6,8 +6,14 @@ probabilite de but (xG), et dashboard interactif.
 
 ## Stack
 
-- **Ingestion** : StatsBomb Open Data (coordonnees spatiales x/y des events)
-- **Stockage** : DuckDB, transformations SQL typees
+- **Ingestion (hybride)** :
+  - [StatsBomb Open Data](https://github.com/statsbomb/open-data) — corpus historique (Ligue 1
+    2015/16, 2021/22, 2022/23 ; Champions League 1999/2000-2018/19) utilise pour entrainer le
+    modele xG (donnees riches, qualite validee).
+  - [Understat](https://understat.com) (scraping) — donnees de la saison en cours, non couvertes
+    par StatsBomb Open Data, pour alimenter le dashboard "live". Coordonnees normalisees vers le
+    referentiel StatsBomb (120x80) a l'ingestion pour un feature engineering unifie.
+- **Stockage** : DuckDB, transformations SQL typees (cle composite `source + match_id`)
 - **ML** : XGBoost (classification binaire xG), SHAP (explicabilite)
 - **Visualisation** : Streamlit + Plotly (shotmap, xG cumule, dashboard joueur)
 - **DevOps** : Docker, GitHub Actions (lint/mypy/pytest), pytest
@@ -37,6 +43,6 @@ make run        # lance le dashboard Streamlit
 
 Projet en developpement actif (vitrine technique Data Science / Data Engineering).
 
-- [x] Jour 1 : scaffold, ingestion StatsBomb, DuckDB
+- [x] Jour 1 : scaffold, ingestion StatsBomb (historique) + Understat (saison en cours), DuckDB
 - [ ] Jour 2 : feature engineering, modele xG, SHAP
 - [ ] Jour 3 : dashboard Streamlit, Docker, CI/CD

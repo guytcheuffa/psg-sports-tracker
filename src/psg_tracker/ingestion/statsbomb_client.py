@@ -124,6 +124,7 @@ class StatsBombClient:
                     shot_type=shot["type"]["name"],
                     outcome=outcome_name,
                     is_goal=outcome_name == "Goal",
+                    source="statsbomb",
                 )
             )
 

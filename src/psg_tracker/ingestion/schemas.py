@@ -1,8 +1,18 @@
-"""Contrats de donnees (schemas typees) pour les events StatsBomb bruts."""
+"""Contrats de donnees (schemas typees), communs aux sources StatsBomb et Understat.
+
+Les coordonnees sont toujours normalisees vers le referentiel StatsBomb
+(pitch 120x80, origine en bas a gauche) au moment de l'ingestion, meme
+pour les tirs Understat (normalises 0-1 nativement). Ca garantit que le
+feature engineering (distance/angle au but) est independant de la source.
+"""
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel
+
+ShotSource = Literal["statsbomb", "understat"]
 
 
 class Location(BaseModel):
@@ -13,7 +23,7 @@ class Location(BaseModel):
 
 
 class ShotEvent(BaseModel):
-    """Un tir extrait des event data StatsBomb."""
+    """Un tir, normalise quelle que soit la source d'origine."""
 
     event_id: str
     match_id: int
@@ -27,6 +37,7 @@ class ShotEvent(BaseModel):
     shot_type: str
     outcome: str
     is_goal: bool
+    source: ShotSource = "statsbomb"
 
 
 class MatchSummary(BaseModel):
@@ -38,3 +49,4 @@ class MatchSummary(BaseModel):
     away_team: str
     competition: str
     season: str
+    source: ShotSource = "statsbomb"

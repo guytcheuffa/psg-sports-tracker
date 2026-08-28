@@ -9,4 +9,4 @@ SELECT
     -- distance euclidienne au centre du but (120, 40) en referentiel StatsBomb
     SQRT(POWER(120 - s.loc_x, 2) + POWER(40 - s.loc_y, 2)) AS distance_to_goal
 FROM shots s
-JOIN matches m USING (match_id);
+JOIN matches m ON s.source = m.source AND s.match_id = m.match_id;
