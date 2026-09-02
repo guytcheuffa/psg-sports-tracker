@@ -11,11 +11,20 @@ dependencies = [
     "requests>=2.31.0",
     "pydantic>=2.6.0",
     "pydantic-settings>=2.2.0",
-    "xgboost-cpu>=2.0.0,<3.0.0",  # variante CPU-only (evite ~350MB de deps CUDA inutiles)
-    # NB: xgboost<3.0 requis pour compat avec shap (voir shap/shap#4288 :
-    # xgboost>=3.0 serialise base_score en tableau, shap<=0.49.1 ne le parse pas)
-    "shap>=0.45.0",
-    "scikit-learn>=1.4.0",
+    # Versions figees (pas juste des bornes) : xgboost/shap/scikit-learn cassent
+    # entre eux de facon subtile et non couverte par des bornes ">=" larges.
+    # Verifie empiriquement : cette combinaison exacte fonctionne (train +
+    # save/load + predict_proba + SHAP). Deux incompatibilites connues :
+    #   - xgboost-cpu>=2.0.0,<3.0.0 requis pour shap<=0.49.1 (shap/shap#4288 :
+    #     xgboost>=3.0 serialise base_score en tableau, shap ne le parse pas)
+    #   - scikit-learn>=1.6 a remplace l'attribut de classe _estimator_type
+    #     par __sklearn_tags__() ; les xgboost 2.x anterieurs a la 2.1.x ne
+    #     s'y adaptent pas et plantent au predict_proba avec
+    #     "TypeError: _estimator_type undefined". xgboost-cpu==2.1.4 gere le
+    #     nouveau protocole de tags correctement.
+    "xgboost-cpu==2.1.4",  # variante CPU-only (evite ~350MB de deps CUDA inutiles)
+    "shap==0.49.1",
+    "scikit-learn==1.7.2",
     "streamlit>=1.32.0",
     "plotly>=5.19.0",
 ]
