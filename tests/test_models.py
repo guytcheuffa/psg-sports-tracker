@@ -4,46 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import pytest
 
 from psg_tracker.features.engineering import build_feature_matrix
 from psg_tracker.models.xg_model import XGModel
-
-
-def _synthetic_shots(n: int = 200, seed: int = 42) -> pd.DataFrame:
-    """Genere des tirs synthetiques ou proximite/angle correlent avec le but.
-
-    Les tirs proches et centres (grand angle, faible distance) sont plus
-    souvent des buts, pour que le modele ait un signal reel a apprendre.
-    """
-    rng = np.random.default_rng(seed)
-    loc_x = rng.uniform(80.0, 119.0, size=n)
-    loc_y = rng.uniform(20.0, 60.0, size=n)
-    distance = np.sqrt((120.0 - loc_x) ** 2 + (40.0 - loc_y) ** 2)
-    goal_probability = np.clip(1.0 - distance / 45.0, 0.02, 0.9)
-    is_goal = rng.uniform(size=n) < goal_probability
-
-    return pd.DataFrame(
-        {
-            "player_id": rng.integers(1, 5, size=n),
-            "loc_x": loc_x,
-            "loc_y": loc_y,
-            "body_part": rng.choice(["Right Foot", "Left Foot", "Head"], size=n),
-            "shot_type": rng.choice(["Open Play", "Corner", "Penalty"], size=n),
-            "is_goal": is_goal,
-        }
-    )
-
-
-@pytest.fixture
-def trained_model() -> tuple[XGModel, pd.DataFrame]:
-    shots = _synthetic_shots()
-    features = build_feature_matrix(shots)
-    model = XGModel()
-    model.train(features, features["is_goal"])
-    return model, features
+from tests.conftest import synthetic_shots
 
 
 def test_train_then_predict_proba_returns_valid_probabilities(
@@ -74,7 +40,7 @@ def test_model_learns_a_real_signal_not_random(
 
 def test_predict_proba_before_train_raises() -> None:
     model = XGModel()
-    features = build_feature_matrix(_synthetic_shots(n=5))
+    features = build_feature_matrix(synthetic_shots(n=5))
 
     with pytest.raises(RuntimeError, match="non entraine"):
         model.predict_proba(features)
@@ -139,3 +105,15 @@ def test_predict_proba_handles_missing_situation_column_at_inference(
 
     assert len(predictions) == 2
     assert predictions.between(0.0, 1.0).all()
+
+
+def test_feature_columns_before_train_raises() -> None:
+    model = XGModel()
+    with pytest.raises(RuntimeError, match="non entraine"):
+        _ = model.feature_columns
+
+
+def test_raw_model_before_train_raises() -> None:
+    model = XGModel()
+    with pytest.raises(RuntimeError, match="non entraine"):
+        _ = model.raw_model

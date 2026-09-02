@@ -41,6 +41,20 @@ class XGModel:
         self._feature_columns: list[str] | None = None
         self._xgb_params = {**_DEFAULT_XGB_PARAMS, **(xgb_params or {})}
 
+    @property
+    def feature_columns(self) -> list[str]:
+        """Colonnes de features figees a l'entrainement (ou au chargement)."""
+        if self._feature_columns is None:
+            raise RuntimeError("XGModel non entraine : appeler train() ou load() d'abord.")
+        return self._feature_columns
+
+    @property
+    def raw_model(self) -> xgb.XGBClassifier:
+        """Le classifieur XGBoost sous-jacent (usage avance, ex: SHAP)."""
+        if self._model is None:
+            raise RuntimeError("XGModel non entraine : appeler train() ou load() d'abord.")
+        return self._model
+
     def train(self, features: pd.DataFrame, target: pd.Series) -> None:
         """Entraine le modele sur les features/target fournis.
 

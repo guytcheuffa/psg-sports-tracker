@@ -11,7 +11,9 @@ dependencies = [
     "requests>=2.31.0",
     "pydantic>=2.6.0",
     "pydantic-settings>=2.2.0",
-    "xgboost-cpu>=2.0.0",  # variante CPU-only (evite ~350MB de deps CUDA inutiles)
+    "xgboost-cpu>=2.0.0,<3.0.0",  # variante CPU-only (evite ~350MB de deps CUDA inutiles)
+    # NB: xgboost<3.0 requis pour compat avec shap (voir shap/shap#4288 :
+    # xgboost>=3.0 serialise base_score en tableau, shap<=0.49.1 ne le parse pas)
     "shap>=0.45.0",
     "scikit-learn>=1.4.0",
     "streamlit>=1.32.0",
