@@ -40,7 +40,7 @@ logger = logging.getLogger("train")
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _DEFAULT_DB_PATH = _REPO_ROOT / settings.duckdb_path
-_DEFAULT_OUTPUT = _REPO_ROOT / "data/models/xg_model.json"
+_DEFAULT_OUTPUT = _REPO_ROOT / settings.model_path
 
 _SHOTS_QUERY = """
     SELECT source, match_id, event_id, player_id, loc_x, loc_y,

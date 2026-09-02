@@ -5,13 +5,13 @@ setup:
 	. .venv/bin/activate && pip install -e ".[dev]"
 
 lint:
-	ruff check src tests
+	ruff check src tests scripts
 
 format:
-	ruff format src tests
+	ruff format src tests scripts
 
 typecheck:
-	mypy src
+	mypy src scripts
 
 test:
 	pytest --cov=psg_tracker --cov-report=term-missing

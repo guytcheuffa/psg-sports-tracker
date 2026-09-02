@@ -2,8 +2,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY pyproject.toml .
+# README.md est requis par pyproject.toml (project.readme) : sans lui,
+# "pip install -e ." echoue au moment de generer les metadonnees du package.
+COPY pyproject.toml README.md ./
 COPY src/ src/
+COPY scripts/ scripts/
 
 RUN pip install --no-cache-dir -e .
 

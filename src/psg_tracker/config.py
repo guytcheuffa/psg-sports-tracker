@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     duckdb_path: Path = Path("data/processed/psg_tracker.duckdb")
+    model_path: Path = Path("data/models/xg_model.json")
     log_level: str = "INFO"
 
     psg_team_name: str = "Paris Saint-Germain"

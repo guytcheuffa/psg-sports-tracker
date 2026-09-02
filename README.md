@@ -38,18 +38,25 @@ probabilite de but (xG), et dashboard interactif.
     StatsBomb + 31 Understat) : **ROC-AUC 0.695, log loss 0.432** sur le jeu de test (293 tirs).
 - **Stockage** : DuckDB, transformations SQL typees (cle composite `source + match_id`)
 - **ML** : XGBoost (classification binaire xG), SHAP (explicabilite)
-- **Visualisation** : Streamlit + Plotly (shotmap, xG cumule, dashboard joueur)
-- **DevOps** : Docker, GitHub Actions (lint/mypy/pytest), pytest
+- **Visualisation** : Streamlit + Plotly — shotmap (demi-terrain, taille = xG, couleur = but/non-but),
+  classement buts reels vs xG cumule par joueur, explicabilite SHAP d'un tir choisi. Teste via
+  `streamlit.testing.v1.AppTest` (`tests/test_app.py`, base + modele synthetiques en base
+  temporaire, pas de dependance aux vraies donnees en CI).
+- **DevOps** : Docker (multi-copy avec README.md requis par `pyproject.toml`), GitHub Actions
+  (lint/mypy/pytest sur `src`+`scripts`+`tests`), pytest + pytest-cov
 
 ## Architecture
 
 ```
 src/psg_tracker/
-├── ingestion/   # client API StatsBomb + schemas typees
+├── ingestion/   # clients StatsBomb + Understat, schemas typees
 ├── storage/     # DuckDB (DDL + transformations SQL)
 ├── features/    # feature engineering xG (partage train/inference)
 ├── models/      # entrainement XGBoost + explicabilite SHAP
-└── app/         # dashboard Streamlit
+└── app/         # dashboard Streamlit (main.py + data_loader.py + pitch.py)
+scripts/
+├── ingest.py    # orchestration ingestion StatsBomb/Understat -> DuckDB
+└── train.py     # entrainement xG sur les donnees reelles en base
 ```
 
 ## Setup
@@ -57,10 +64,33 @@ src/psg_tracker/
 ```bash
 make setup      # venv + installation
 make test       # tests + coverage
-make lint       # ruff
-make typecheck  # mypy
-make run        # lance le dashboard Streamlit
+make lint       # ruff (src, tests, scripts)
+make typecheck  # mypy strict (src, scripts)
+make run        # lance le dashboard Streamlit (necessite data + modele, cf. ci-dessous)
 ```
+
+Avant de lancer le dashboard : ingerer les donnees puis entrainer le modele (une fois) :
+
+```bash
+python scripts/ingest.py statsbomb --discover
+python scripts/ingest.py understat
+python scripts/train.py
+```
+
+### Docker
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+Le conteneur installe le package (`pip install -e .`, deps incluses dans `pyproject.toml`) et lance
+`streamlit run src/psg_tracker/app/main.py` sur le port 8501. Le dossier `data/` est monte en
+volume (`docker-compose.yml`) : ingerer/entrainer en local d'abord (commandes ci-dessus) pour que
+le dashboard ait des donnees a afficher, ou lancer `scripts/ingest.py`/`scripts/train.py` dans le
+conteneur (`docker compose run app python scripts/ingest.py ...`). *Configuration non verifiee par
+un build reel dans cet environnement (Docker indisponible ici) : verifiee par relecture uniquement
+(le pipeline `pip install -e .` requiert `README.md`, present dans l'image via le Dockerfile).*
 
 ## Statut
 
@@ -73,4 +103,7 @@ Projet en developpement actif (vitrine technique Data Science / Data Engineering
       AJAX internes, cf. section Understat ci-dessus)
 - [x] Entrainement reel du modele xG sur les 1463 tirs combines (`scripts/train.py`),
       ROC-AUC 0.695 sur le jeu de test
-- [ ] Jour 3 : dashboard Streamlit, Docker, CI/CD
+- [x] Jour 3 : dashboard Streamlit (shotmap, classement xG, explicabilite SHAP), teste via AppTest
+- [x] CI/CD : GitHub Actions (ruff + mypy strict + pytest/coverage sur `src`+`scripts`+`tests`)
+- [ ] Docker : configuration ecrite et relue, mais pas buildee dans cet environnement (pas de
+      Docker disponible ici) — a valider en local avant publication

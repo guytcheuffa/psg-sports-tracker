@@ -51,3 +51,10 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+
+[tool.coverage.run]
+# AppTest (test_app.py) execute le script Streamlit dans un thread dedie
+# (machinerie interne du ScriptRunner) : sans concurrency=thread, coverage.py
+# ne trace que le thread principal et rapporte main.py comme non couvert
+# alors qu'il l'est bien.
+concurrency = ["thread"]
