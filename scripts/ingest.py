@@ -141,7 +141,7 @@ def ingest_statsbomb(
 def ingest_understat(
     manager: DuckDBManager,
     team_slug: str = settings.understat_psg_slug,
-    team_name: str = settings.psg_team_name,
+    team_name: str = settings.understat_team_name,
     season: str | None = None,
 ) -> None:
     """Ingere les donnees Understat (saison en cours par defaut)."""
@@ -194,7 +194,7 @@ def main() -> None:
 
     us_parser = subparsers.add_parser("understat", help="Ingestion Understat (scraping)")
     us_parser.add_argument("--team-slug", default=settings.understat_psg_slug)
-    us_parser.add_argument("--team-name", default=settings.psg_team_name)
+    us_parser.add_argument("--team-name", default=settings.understat_team_name)
     us_parser.add_argument("--season", default=None)
 
     args = parser.parse_args()

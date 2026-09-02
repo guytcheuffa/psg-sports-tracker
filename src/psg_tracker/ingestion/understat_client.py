@@ -1,11 +1,17 @@
 """Client de scraping pour understat.com (saison en cours, non couverte par
 StatsBomb Open Data).
 
-Understat n'expose pas d'API publique documentee : les donnees de tir
-(coordonnees x/y, xG maison, situation, minute...) sont embarquees dans des
-balises <script> des pages HTML sous forme de chaines JS echappees
-(`var shotsData = JSON.parse('...')`). Ce module extrait et decode ces
-variables.
+Understat n'expose pas d'API publique documentee. Les pages `/team/...` et
+`/match/...` sont des coquilles HTML quasi vides : le navigateur charge les
+donnees ensuite via des appels AJAX internes (`getTeamData/{team}/{season}`
+et `getMatchData/{match_id}`), qui renvoient directement du JSON. Ce module
+appelle ces memes endpoints (identifies en inspectant `js/team.min.js` et
+`js/match.min.js`) plutot que de parser du HTML.
+
+Point d'attention : ces endpoints repondent 404 sans l'en-tete
+`X-Requested-With: XMLHttpRequest` (verifie empiriquement) - c'est la seule
+protection anti-scraping constatee, en plus du gzip standard que `requests`
+gere nativement.
 
 Usage prevu pour ce projet : recuperer les tirs de la saison en cours (non
 disponibles via StatsBomb Open Data, qui s'arrete a 2022/2023) afin
@@ -19,9 +25,7 @@ raisonnable (voir `request_delay_seconds`) et le robots.txt du site.
 
 from __future__ import annotations
 
-import json
 import logging
-import re
 import time
 import zlib
 from typing import Any
@@ -37,7 +41,6 @@ _USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 )
-_JSON_VAR_PATTERN = "var {name} = JSON.parse\\('(.*?)'\\);"
 
 # Understat normalise x/y entre 0 et 1. On les remet dans le referentiel
 # StatsBomb (120 x 80 yards) pour que le feature engineering soit unifie.
@@ -53,9 +56,48 @@ _RESULT_TO_OUTCOME = {
     "OwnGoal": "Own Goal",
 }
 
+# Understat et StatsBomb utilisent des vocabulaires de categories differents
+# pour la meme notion (ex: "OpenPlay" vs "Open Play"). Sans harmonisation,
+# le one-hot encoding de `build_feature_matrix` cree des colonnes dupliquees
+# par source ("situation_OpenPlay" ET "situation_Open Play"), ce qui casse
+# la generalisation du modele - constate empiriquement sur les 2 premiers
+# matches scrapes. On remappe donc vers le vocabulaire StatsBomb (corpus de
+# reference, plus volumineux) a l'ingestion.
+_SITUATION_TO_CANONICAL = {
+    "OpenPlay": "Open Play",
+    "FromCorner": "Corner",
+    "SetPiece": "Free Kick",
+    "DirectFreekick": "Free Kick",
+    "Penalty": "Penalty",
+}
+
+_BODY_PART_TO_CANONICAL = {
+    "RightFoot": "Right Foot",
+    "LeftFoot": "Left Foot",
+    "Head": "Head",
+    "OtherBodyPart": "Other",
+}
+
+
+def _normalize_category(raw_value: str, mapping: dict[str, str], field_name: str) -> str:
+    """Remappe une categorie Understat vers le vocabulaire canonique StatsBomb.
+
+    Log un warning (sans planter) si la valeur est inconnue, afin de detecter
+    silencieusement toute nouvelle categorie introduite par understat.com.
+    """
+    canonical = mapping.get(raw_value)
+    if canonical is None:
+        logger.warning(
+            "Categorie Understat '%s' inconnue pour %s, conservee telle quelle",
+            raw_value,
+            field_name,
+        )
+        return raw_value
+    return canonical
+
 
 class UnderstatClient:
-    """Scrape les pages equipe/match d'understat.com."""
+    """Appelle les endpoints JSON internes d'understat.com."""
 
     def __init__(
         self,
@@ -67,47 +109,30 @@ class UnderstatClient:
         self._timeout = timeout
         self._request_delay_seconds = request_delay_seconds
         self._session = requests.Session()
-        self._session.headers.update({"User-Agent": _USER_AGENT})
+        self._session.headers.update(
+            {
+                "User-Agent": _USER_AGENT,
+                "X-Requested-With": "XMLHttpRequest",
+            }
+        )
 
-    def _get_html(self, path: str) -> str:
-        """GET une page HTML d'understat.com."""
+    def _get_json(self, path: str) -> dict[str, Any]:
+        """GET un endpoint JSON interne d'understat.com."""
         url = f"{self._base_url}/{path}"
         response = self._session.get(url, timeout=self._timeout)
         response.raise_for_status()
-        return response.text
-
-    @staticmethod
-    def _extract_json_var(html: str, var_name: str) -> Any:
-        """Extrait et decode une variable `JSON.parse('...')` embarquee en JS.
-
-        La chaine est echappee au format JS (ex: \\x3C pour '<'). On tente un
-        `json.loads` direct d'abord (au cas ou le format change), puis on
-        retombe sur le decodage `unicode_escape` classique utilise par
-        understat.
-        """
-        pattern = _JSON_VAR_PATTERN.format(name=re.escape(var_name))
-        match = re.search(pattern, html)
-        if match is None:
-            raise ValueError(f"Variable '{var_name}' introuvable dans la page")
-
-        raw = match.group(1)
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            decoded = (
-                raw.encode("utf-8").decode("unicode_escape").encode("latin1").decode("utf-8")
-            )
-            return json.loads(decoded)
+        data: dict[str, Any] = response.json()
+        return data
 
     def get_team_matches(self, team_slug: str, season: str) -> list[dict[str, Any]]:
-        """Liste brute des matches d'une equipe pour une saison (`datesData`).
+        """Liste brute des matches d'une equipe pour une saison.
 
         Args:
             team_slug: identifiant understat de l'equipe (ex: "Paris_Saint_Germain").
             season: annee de debut de saison (ex: "2026" pour 2026/2027).
         """
-        html = self._get_html(f"team/{team_slug}/{season}")
-        matches: list[dict[str, Any]] = self._extract_json_var(html, "datesData")
+        data = self._get_json(f"getTeamData/{team_slug}/{season}")
+        matches: list[dict[str, Any]] = data["dates"]
         logger.info(
             "get_team_matches: %d match(es) (team=%s, season=%s)",
             len(matches),
@@ -117,14 +142,14 @@ class UnderstatClient:
         return matches
 
     def get_match_shots(self, match_id: int, team_name: str | None = None) -> list[ShotEvent]:
-        """Tous les tirs d'un match (`shotsData`), cote domicile + exterieur.
+        """Tous les tirs d'un match, cote domicile + exterieur.
 
         Args:
             match_id: id understat du match.
             team_name: si fourni, ne garde que les tirs de cette equipe.
         """
-        html = self._get_html(f"match/{match_id}")
-        raw: dict[str, list[dict[str, Any]]] = self._extract_json_var(html, "shotsData")
+        data = self._get_json(f"getMatchData/{match_id}")
+        raw: dict[str, list[dict[str, Any]]] = data["shots"]
 
         shots: list[ShotEvent] = []
         for side_shots in (raw.get("h", []), raw.get("a", [])):
@@ -140,15 +165,19 @@ class UnderstatClient:
                         match_id=match_id,
                         player_id=int(shot["player_id"]),
                         player_name=shot["player"],
-                        team_id=zlib.crc32(shooter_team.encode('utf-8')),
+                        team_id=zlib.crc32(shooter_team.encode("utf-8")),
                         minute=int(shot["minute"]),
                         second=0,
                         location=Location(
                             x=float(shot["X"]) * _PITCH_LENGTH,
                             y=float(shot["Y"]) * _PITCH_WIDTH,
                         ),
-                        body_part=shot.get("shotType", "Unknown"),
-                        shot_type=shot.get("situation", "Unknown"),
+                        body_part=_normalize_category(
+                            shot.get("shotType", "Unknown"), _BODY_PART_TO_CANONICAL, "shotType"
+                        ),
+                        shot_type=_normalize_category(
+                            shot.get("situation", "Unknown"), _SITUATION_TO_CANONICAL, "situation"
+                        ),
                         outcome=outcome,
                         is_goal=shot["result"] == "Goal",
                         source="understat",

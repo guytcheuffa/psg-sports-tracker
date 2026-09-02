@@ -37,8 +37,12 @@ class Settings(BaseSettings):
     statsbomb_champions_league_competition_id: int = 16
 
     # --- Understat : source "live" pour la saison en cours (scraping) ---
+    # Understat orthographie l'equipe differemment de StatsBomb (pas de
+    # tiret) : "Paris Saint Germain" vs "Paris Saint-Germain". Garder un
+    # champ dedie evite un filtrage silencieusement casse.
     understat_base_url: str = "https://understat.com"
     understat_psg_slug: str = "Paris_Saint_Germain"
+    understat_team_name: str = "Paris Saint Germain"
 
 
 settings = Settings()
