@@ -28,7 +28,7 @@ from typing import Any
 
 import requests
 
-from psg_tracker.ingestion.schemas import Location, ShotEvent
+from psg_tracker.schemas import Location, ShotEvent
 
 logger = logging.getLogger(__name__)
 

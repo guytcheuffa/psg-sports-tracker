@@ -1,9 +1,10 @@
-"""Contrats de donnees (schemas typees), communs aux sources StatsBomb et Understat.
+"""Contrats de donnees (schemas typees), partages entre ingestion et storage.
 
-Les coordonnees sont toujours normalisees vers le referentiel StatsBomb
-(pitch 120x80, origine en bas a gauche) au moment de l'ingestion, meme
-pour les tirs Understat (normalises 0-1 nativement). Ca garantit que le
-feature engineering (distance/angle au but) est independant de la source.
+Communs aux sources StatsBomb et Understat : les coordonnees sont toujours
+normalisees vers le referentiel StatsBomb (pitch 120x80, origine en bas a
+gauche) au moment de l'ingestion, meme pour les tirs Understat (normalises
+0-1 nativement). Ca garantit que le feature engineering (distance/angle au
+but) est independant de la source.
 """
 
 from __future__ import annotations
