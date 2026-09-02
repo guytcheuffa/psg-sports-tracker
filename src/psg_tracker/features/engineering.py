@@ -29,6 +29,15 @@ GOAL_WIDTH = 8.0
 
 _FOOT_BODY_PARTS = {"Right Foot", "Left Foot"}
 
+# Features de base produites par build_feature_matrix, utilisables telles
+# quelles par un modele (numeriques/booleennes, pas d'encodage requis).
+BASE_FEATURE_COLUMNS = [
+    "distance_to_goal",
+    "shot_angle_rad",
+    "is_header",
+    "is_strong_foot",
+]
+
 
 def add_distance_to_goal(df: pd.DataFrame) -> pd.DataFrame:
     """Ajoute `distance_to_goal` : distance euclidienne au centre des cages.
@@ -106,3 +115,16 @@ def build_feature_matrix(df: pd.DataFrame) -> pd.DataFrame:
     features = pd.concat([features, shot_type_dummies], axis=1)
 
     return features
+
+
+def select_feature_columns(df: pd.DataFrame) -> list[str]:
+    """Colonnes numeriques/booleennes exploitables telles quelles par un modele.
+
+    Combine `BASE_FEATURE_COLUMNS` et les colonnes one-hot dynamiques
+    `situation_*` (dependent des categories de `shot_type` presentes dans le
+    DataFrame). Utilise a la fois a l'entrainement (pour figer la liste) et
+    a l'inference (via `DataFrame.reindex`, cf. `XGModel.predict_proba`) pour
+    garantir un schema de features identique entre les deux.
+    """
+    dynamic = [c for c in df.columns if c.startswith("situation_")]
+    return [c for c in BASE_FEATURE_COLUMNS if c in df.columns] + dynamic
