@@ -19,6 +19,11 @@ _INSERT_MATCH_SQL = """
     VALUES (?, ?, CAST(? AS DATE), ?, ?, ?, ?)
 """
 
+_INSERT_PLAYER_POSITION_SQL = """
+    INSERT OR REPLACE INTO player_positions (player_name, season, position_raw)
+    VALUES (?, ?, ?)
+"""
+
 _INSERT_SHOT_SQL = """
     INSERT OR REPLACE INTO shots
         (event_id, match_id, source, player_id, player_name, team_id, minute, second,
@@ -107,6 +112,20 @@ class DuckDBManager:
         ]
         self.connect().executemany(_INSERT_SHOT_SQL, rows)
         logger.info("insert_shots: %d tir(s) inseres", len(shots))
+
+    def insert_player_positions(self, rows: Sequence[tuple[str, str, str]]) -> None:
+        """Insere (ou remplace) des lignes (player_name, season, position_raw).
+
+        Source : `UnderstatClient.get_team_players`. Sert a filtrer/annoter
+        le dashboard par poste (cf. `app/data_loader.py`) - StatsBomb ne
+        fournit pas cette info sur les evenements de tir deja ingeres, donc
+        Understat est la seule source pour ce champ (mais couvre toutes les
+        saisons 2015-2026, y compris celles ou StatsBomb est aussi present).
+        """
+        if not rows:
+            return
+        self.connect().executemany(_INSERT_PLAYER_POSITION_SQL, list(rows))
+        logger.info("insert_player_positions: %d ligne(s) inseree(s)", len(rows))
 
     def close(self) -> None:
         """Ferme proprement la connexion (idempotent)."""

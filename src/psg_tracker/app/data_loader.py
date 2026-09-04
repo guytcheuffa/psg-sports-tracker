@@ -33,30 +33,42 @@ _SHOTS_QUERY = """
 # apparait deux fois dans le classement et le selecteur de profil.
 #
 # Recense par rapprochement de chaines (difflib.SequenceMatcher, seuil
-# ~0.6) sur les noms distincts de `shots.player_name`, verifie manuellement
-# paire par paire pour ecarter les faux positifs (ex. "Gonçalo Ramos" vs
-# "Sergio Ramos" : deux joueurs distincts qui partagent juste un nom de
-# famille). Cible en general le nom d'usage Understat (plus court), sauf
-# quand Understat omet un accent que StatsBomb a correctement (ex. "Jean-
-# Kevin Augustin" -> "Jean-Kévin Augustin") : dans ce cas l'orthographe
-# correcte l'emporte. A completer si l'ingestion de futures saisons revele
-# de nouveaux doublons (rejouer le rapprochement difflib sur les noms
-# distincts en base).
+# ~0.6, puis affine par difflib.get_close_matches contre les noms de
+# `player_positions` pour les joueurs 100% StatsBomb qui ne creent pas de
+# doublon visible mais ratent quand meme le rattachement du poste, ex.
+# "Lionel Andrés Messi Cuccittini") sur les noms distincts de
+# `shots.player_name`, verifie manuellement paire par paire pour ecarter
+# les faux positifs (ex. "Gonçalo Ramos" vs "Sergio Ramos" : deux joueurs
+# distincts qui partagent juste un nom de famille). Cible en general le nom
+# d'usage Understat (plus court), sauf quand Understat omet un accent que
+# StatsBomb a correctement (ex. "Jean-Kevin Augustin" -> "Jean-Kévin
+# Augustin") : dans ce cas l'orthographe correcte l'emporte. A completer si
+# l'ingestion de futures saisons revele de nouveaux doublons/rattachements
+# manques (rejouer les deux rapprochements difflib sur les noms distincts
+# en base).
 _PLAYER_NAME_ALIASES: dict[str, str] = {
     "Achraf Hakimi Mouh": "Achraf Hakimi",
     "Ángel Fabián Di María Hernández": "Ángel Di María",
     "Carlos Soler Barragán": "Carlos Soler",
     "Danilo Luís Hélio Pereira": "Danilo Pereira",
+    "David Luiz Moreira Marinho": "David Luiz",
     "Edinson Roberto Cavani Gómez": "Edinson Cavani",
+    "Ezequiel Iván Lavezzi": "Ezequiel Lavezzi",
     "Fabián Ruiz Peña": "Fabián",
+    "Gregory van der Wiel": "Gregory Van der Wiel",
+    "Hervin Scicchitano Ongenda": "Hervin Ongenda",
     "Idrissa Gana Gueye": "Idrissa Gueye",
     "Javier Matías Pastore": "Javier Pastore",
     "Jean-Kevin Augustin": "Jean-Kévin Augustin",
     "Juan Bernat Velasco": "Juan Bernat",
     "Kylian Mbappe-Lottin": "Kylian Mbappé Lottin",
     "Leandro Daniel Paredes": "Leandro Paredes",
+    "Lionel Andrés Messi Cuccittini": "Lionel Messi",
+    "Lucas Rodrigues Moura da Silva": "Lucas Moura",
     "Marcos Aoás Corrêa": "Marquinhos",
     "Mauro Emanuel Icardi Rivero": "Mauro Icardi",
+    "Maxwell Scherrer Cabelino Andrade": "Maxwell",
+    "Neymar da Silva Santos Junior": "Neymar",
     "Nordi Mukiele Mulere": "Nordi Mukiele",
     "Pablo Sarabia García": "Pablo Sarabia",
     "Renato Júnior Luz Sanches": "Renato Sanches",
@@ -66,6 +78,63 @@ _PLAYER_NAME_ALIASES: dict[str, str] = {
     "Warren Zaire Emery": "Warren Zaïre-Emery",
     "Zlatan Ibrahimovic": "Zlatan Ibrahimović",
 }
+
+
+# Poste principal par joueur, derive des codes Understat (seule source a
+# fournir cette info - pas StatsBomb) : D=Defenseur, M=Milieu, F=Attaquant,
+# GK=Gardien. "S" (aussi entre comme remplacant) n'est pas un poste et est
+# ignore.
+_POSITION_LABELS: dict[str, str] = {
+    "GK": "Gardien",
+    "D": "Défenseur",
+    "M": "Milieu",
+    "F": "Attaquant",
+}
+
+_POSITIONS_QUERY = "SELECT player_name, season, position_raw FROM player_positions"
+
+
+def _primary_position(position_raw: str) -> str | None:
+    """Poste principal a partir d'un code Understat (ex: "F M S" -> "Attaquant").
+
+    Le premier code reel (hors "S") est retenu : Understat ordonne les
+    codes approximativement par temps de jeu decroissant a ce poste.
+    """
+    for token in position_raw.split():
+        label = _POSITION_LABELS.get(token)
+        if label is not None:
+            return label
+    return None
+
+
+def load_player_positions(db_path: str) -> pd.DataFrame:
+    """Poste dominant par joueur (mode sur toutes les saisons), nom harmonise.
+
+    Une ligne par (joueur, saison) en base ; agregee ici en un seul poste
+    "dominant" par joueur (le plus frequent parmi les postes principaux
+    saison par saison) - un joueur ne change pas assez souvent de poste
+    pour justifier un filtre saison-par-saison-et-poste dans le dashboard.
+    """
+    conn = duckdb.connect(db_path, read_only=True)
+    try:
+        raw = conn.execute(_POSITIONS_QUERY).fetchdf()
+    finally:
+        conn.close()
+
+    if raw.empty:
+        return pd.DataFrame(columns=["player_name", "position"])
+
+    raw["player_name"] = raw["player_name"].replace(_PLAYER_NAME_ALIASES)
+    raw["position"] = raw["position_raw"].map(_primary_position)
+    raw = raw.dropna(subset=["position"])
+    if raw.empty:
+        return pd.DataFrame(columns=["player_name", "position"])
+
+    return (
+        raw.groupby("player_name")["position"]
+        .agg(lambda s: s.value_counts().idxmax())
+        .reset_index()
+    )
 
 
 @st.cache_data(show_spinner="Chargement des tirs depuis DuckDB...")
@@ -93,6 +162,10 @@ def load_shots_with_xg(db_path: str, model_path: str) -> pd.DataFrame:
         return shots
 
     shots["player_name"] = shots["player_name"].replace(_PLAYER_NAME_ALIASES)
+
+    positions = load_player_positions(db_path)
+    shots = shots.merge(positions, on="player_name", how="left")
+    shots["position"] = shots["position"].fillna("Inconnu")
 
     features = build_feature_matrix(shots)
 

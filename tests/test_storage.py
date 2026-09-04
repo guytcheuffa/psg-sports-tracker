@@ -129,6 +129,20 @@ def test_statsbomb_and_understat_matches_do_not_collide(tmp_path: Path) -> None:
     assert count == (2,)
 
 
+def test_insert_player_positions_roundtrip_and_replace(tmp_path: Path) -> None:
+    with DuckDBManager(db_path=tmp_path / "test.duckdb") as manager:
+        manager.apply_ddl(DDL_PATH)
+        manager.insert_player_positions([("Kylian Mbappe-Lottin", "2022/2023", "F M S")])
+        # re-ingestion (meme cle) : doit remplacer, pas dupliquer
+        manager.insert_player_positions([("Kylian Mbappe-Lottin", "2022/2023", "F")])
+
+        rows = manager.connect().execute(
+            "SELECT player_name, season, position_raw FROM player_positions"
+        ).fetchall()
+
+    assert rows == [("Kylian Mbappe-Lottin", "2022/2023", "F")]
+
+
 def test_get_match_dates_returns_dates_for_given_source_only(tmp_path: Path) -> None:
     with DuckDBManager(db_path=tmp_path / "test.duckdb") as manager:
         manager.apply_ddl(DDL_PATH)

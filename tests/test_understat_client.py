@@ -85,6 +85,22 @@ def test_get_team_matches_parses_dates(client: UnderstatClient) -> None:
     assert called_url.endswith("getTeamData/Paris_Saint_Germain/2026")
 
 
+def test_get_team_players_parses_position(client: UnderstatClient) -> None:
+    players_data = [
+        {"id": "3423", "player_name": "Kylian Mbappe-Lottin", "position": "F M S"},
+        {"id": "500", "player_name": "Gianluigi Donnarumma", "position": "GK"},
+    ]
+    payload = {"dates": [], "players": players_data, "statistics": {}}
+    with patch.object(client._session, "get", return_value=_mock_response(payload)) as mock_get:
+        players = client.get_team_players("Paris_Saint_Germain", "2023")
+
+    assert len(players) == 2
+    assert players[0]["player_name"] == "Kylian Mbappe-Lottin"
+    assert players[0]["position"] == "F M S"
+    called_url = mock_get.call_args.args[0]
+    assert called_url.endswith("getTeamData/Paris_Saint_Germain/2023")
+
+
 def test_get_match_shots_parses_both_sides_and_scales_coordinates(client: UnderstatClient) -> None:
     payload = {"shots": SHOTS_DATA, "rosters": {}, "tmpl": {}}
     with patch.object(client._session, "get", return_value=_mock_response(payload)):

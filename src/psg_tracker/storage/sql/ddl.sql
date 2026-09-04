@@ -15,6 +15,13 @@ CREATE TABLE IF NOT EXISTS matches (
     PRIMARY KEY (source, match_id)
 );
 
+CREATE TABLE IF NOT EXISTS player_positions (
+    player_name    VARCHAR NOT NULL,  -- nom brut Understat (harmonise cote app, cf. data_loader)
+    season         VARCHAR NOT NULL,  -- format "annee_debut/annee_fin", ex: "2015/2016"
+    position_raw   VARCHAR,           -- code brut Understat, ex: "F M S"
+    PRIMARY KEY (player_name, season)
+);
+
 CREATE TABLE IF NOT EXISTS shots (
     event_id     VARCHAR PRIMARY KEY,  -- prefixe par source, deja unique globalement
     match_id     BIGINT,

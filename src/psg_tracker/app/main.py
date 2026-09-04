@@ -61,10 +61,22 @@ def _check_prerequisites() -> bool:
 
 
 _SOURCE_LABELS = {"statsbomb": "StatsBomb", "understat": "Understat"}
+# Ordre football (gardien -> attaquant) plutot qu'alphabetique ; "Inconnu"
+# en dernier (cf. app/data_loader.py : ~0.2% des tirs sans poste rattache,
+# joueurs tres marginaux non listes par Understat cette saison-la).
+_POSITION_ORDER = ["Gardien", "Défenseur", "Milieu", "Attaquant", "Inconnu"]
+_GOAL_FILTER_OPTIONS = ["Tous les tirs", "Buts uniquement", "Sans but uniquement"]
 
 
 def _apply_filters(shots: pd.DataFrame) -> pd.DataFrame:
-    """Sidebar complete : identite visuelle, filtres (source, competition), infos dataset."""
+    """Sidebar complete : identite visuelle, filtres, infos dataset.
+
+    Filtres source/competition/saison/poste (multiselect, tout coche par
+    defaut) + un filtre but/pas-but (radio, "Tous" par defaut) : combines,
+    ils permettent d'isoler par ex. "tous les tirs des attaquants qui ont
+    fini au but, saison 2023/2024" pour chercher des patterns dans la
+    shotmap ou le classement.
+    """
     st.sidebar.markdown(theme.sidebar_brand_html(), unsafe_allow_html=True)
 
     sources = sorted(shots["source"].unique())
@@ -83,15 +95,31 @@ def _apply_filters(shots: pd.DataFrame) -> pd.DataFrame:
         "Competition", competitions, default=competitions
     )
 
+    seasons = sorted(shots["season"].astype(str).unique())
+    selected_seasons = st.sidebar.multiselect("Saison", seasons, default=seasons)
+
+    positions = [p for p in _POSITION_ORDER if p in set(shots["position"].unique())]
+    selected_positions = st.sidebar.multiselect("Poste", positions, default=positions)
+
+    goal_filter = st.sidebar.radio("But", _GOAL_FILTER_OPTIONS, index=0)
+
     n_matches = shots[["source", "match_date"]].drop_duplicates().shape[0]
-    seasons = ", ".join(sorted(shots["season"].astype(str).unique()))
+    seasons_label = ", ".join(seasons)
     st.sidebar.markdown(
-        theme.sidebar_footer_html(len(shots), n_matches, seasons), unsafe_allow_html=True
+        theme.sidebar_footer_html(len(shots), n_matches, seasons_label), unsafe_allow_html=True
     )
 
-    return shots[
-        shots["source"].isin(selected_sources) & shots["competition"].isin(selected_competitions)
+    filtered = shots[
+        shots["source"].isin(selected_sources)
+        & shots["competition"].isin(selected_competitions)
+        & shots["season"].astype(str).isin(selected_seasons)
+        & shots["position"].isin(selected_positions)
     ]
+    if goal_filter == "Buts uniquement":
+        filtered = filtered[filtered["is_goal"]]
+    elif goal_filter == "Sans but uniquement":
+        filtered = filtered[~filtered["is_goal"]]
+    return filtered
 
 
 def _render_kpis(shots: pd.DataFrame) -> None:
@@ -175,11 +203,12 @@ def _render_player_profile(shots: pd.DataFrame) -> None:
     n_shots = len(player_shots)
     n_goals = int(player_shots["is_goal"].sum())
     xg_total = float(player_shots["xg_pred"].sum())
+    position = str(player_shots["position"].iloc[0])
 
     st.markdown(
         theme.player_hero_html(
             name=player,
-            subtitle=f"{n_matches} match(s) - {n_shots} tir(s) dans la selection",
+            subtitle=f"{position} - {n_matches} match(s) - {n_shots} tir(s) dans la selection",
             photo_data_uri=theme.player_photo_data_uri(player),
         ),
         unsafe_allow_html=True,

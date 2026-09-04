@@ -239,6 +239,14 @@ def ingest_understat(
     if shots:
         manager.insert_shots(shots)
 
+    raw_players = client.get_team_players(team_slug, raw_season)
+    position_rows = [
+        (str(p["player_name"]), formatted_season, str(p.get("position", "")))
+        for p in raw_players
+        if p.get("player_name")
+    ]
+    manager.insert_player_positions(position_rows)
+
     if n_skipped:
         logger.info(
             "Understat saison %s: %d match(es) ignore(s) (deja couverts par StatsBomb "

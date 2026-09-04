@@ -141,6 +141,29 @@ class UnderstatClient:
         )
         return matches
 
+    def get_team_players(self, team_slug: str, season: str) -> list[dict[str, Any]]:
+        """Liste brute des joueurs d'une equipe pour une saison, avec leur poste.
+
+        Meme endpoint que `get_team_matches` (`getTeamData/{team}/{season}`,
+        cle "players" plutot que "dates") : un appel HTTP separe (le contenu
+        n'est pas mis en cache entre les deux methodes), mais reste un cout
+        negligeable a l'echelle du backfill historique (~12 saisons).
+
+        Le champ "position" est une chaine de codes espaces (ex: "F M S") :
+        D=Defenseur, M=Milieu, F=Attaquant, GK=Gardien, S=est aussi entre en
+        tant que remplacant (pas un poste a proprement parler). Ordonnes
+        approximativement par temps de jeu decroissant a ce poste.
+        """
+        data = self._get_json(f"getTeamData/{team_slug}/{season}")
+        players: list[dict[str, Any]] = data["players"]
+        logger.info(
+            "get_team_players: %d joueur(s) (team=%s, season=%s)",
+            len(players),
+            team_slug,
+            season,
+        )
+        return players
+
     def get_match_shots(self, match_id: int, team_name: str | None = None) -> list[ShotEvent]:
         """Tous les tirs d'un match, cote domicile + exterieur.
 
