@@ -242,12 +242,12 @@ def main() -> None:
     st.markdown(theme.inject_global_css(), unsafe_allow_html=True)
 
     if not _check_prerequisites():
-        st.markdown(theme.header_html("Pipeline de donnees xG PSG"), unsafe_allow_html=True)
+        st.markdown(theme.hero_banner_html("Pipeline de donnees xG PSG"), unsafe_allow_html=True)
         return
 
     shots = load_shots_with_xg(str(_DB_PATH), str(_MODEL_PATH))
     st.markdown(
-        theme.header_html(f"{len(shots)} tirs en base - analytics xG en temps quasi reel"),
+        theme.hero_banner_html(f"{len(shots)} tirs en base - analytics xG en temps quasi reel"),
         unsafe_allow_html=True,
     )
 

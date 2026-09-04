@@ -1,16 +1,20 @@
-"""Identite visuelle du dashboard : palette, CSS injecte, template Plotly, badge.
+"""Identite visuelle du dashboard : palette, CSS injecte, template Plotly, assets.
 
 Regroupe tout ce qui est pure presentation (aucune logique metier) pour que
-`main.py` reste lisible. Le badge est un dessin original (cercle + tour
-Eiffel stylisee geometrique) inspire des couleurs du club, pas une
-reproduction du blason officiel deregistre (marque protegee) : safe a
-committer dans un repo public.
+`main.py` reste lisible.
 
-Portraits joueur : par defaut, aucune vraie photo (droits d'auteur presse/
-agence non geres ici). `player_photo_data_uri` cherche un fichier local
-optionnel sous `data/assets/players/<slug>.{jpg,png}` (dossier gitignore,
-usage prive uniquement) ; a defaut, `_render_player_hero` retombe sur un
-monogramme geant en filigrane genere en CSS pur.
+Logo/banniere club : `psg_logo_data_uri`/`psg_hero_data_uri` cherchent des
+fichiers locaux optionnels sous `data/assets/branding/` (voir constantes
+`_LOGO_PATH`/`_HERO_PATH`). Le blason et les visuels du club sont des
+marques/images protegees : ce depot ne les fournit pas par defaut (dossier
+non versionne, cf. `.gitignore`) - c'est a l'utilisateur de les y deposer
+s'il en a les droits pour son usage (portfolio personnel). A defaut de
+fichier, `psg_badge_svg` (dessin original, cercle + tour Eiffel stylisee)
+sert de repli pour que le dashboard reste fonctionnel et publiable tel quel.
+
+Portraits joueur : meme logique via `player_photo_data_uri`
+(`data/assets/players/<slug>.{jpg,png}`) ; a defaut, un monogramme geant en
+filigrane genere en CSS pur (`player_hero_html`).
 """
 
 from __future__ import annotations
@@ -31,7 +35,13 @@ TEXT_MUTED = "#9CA3C4"
 GREEN = "#22C55E"
 GRAY = "#94A3B8"
 
-_ASSETS_DIR = Path(__file__).resolve().parents[3] / "data/assets/players"
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_PLAYERS_DIR = _REPO_ROOT / "data/assets/players"
+_BRANDING_DIR = _REPO_ROOT / "data/assets/branding"
+_LOGO_PATH = _BRANDING_DIR / "psg-logo.png"
+_HERO_PATH = _BRANDING_DIR / "psg-hero.png"
+
+_MIME_BY_SUFFIX = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png"}
 
 
 def slugify(name: str) -> str:
@@ -50,6 +60,15 @@ def initials(name: str) -> str:
     return (parts[0][0] + parts[-1][0]).upper()
 
 
+def _local_image_data_uri(path: Path) -> str | None:
+    """Encode un fichier image local en data URI, ou None s'il n'existe pas."""
+    mime = _MIME_BY_SUFFIX.get(path.suffix.lower())
+    if mime is None or not path.exists():
+        return None
+    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+    return f"data:{mime};base64,{encoded}"
+
+
 def player_photo_data_uri(name: str) -> str | None:
     """Cherche une photo locale optionnelle pour ce joueur, hors du repo git.
 
@@ -59,16 +78,25 @@ def player_photo_data_uri(name: str) -> str | None:
     les droits. Rien n'est fourni par defaut.
     """
     slug = slugify(name)
-    for ext, mime in ((".jpg", "image/jpeg"), (".jpeg", "image/jpeg"), (".png", "image/png")):
-        path = _ASSETS_DIR / f"{slug}{ext}"
-        if path.exists():
-            encoded = base64.b64encode(path.read_bytes()).decode("ascii")
-            return f"data:{mime};base64,{encoded}"
+    for ext in (".jpg", ".jpeg", ".png"):
+        data_uri = _local_image_data_uri(_PLAYERS_DIR / f"{slug}{ext}")
+        if data_uri is not None:
+            return data_uri
     return None
 
 
+def psg_logo_data_uri() -> str | None:
+    """Logo club reel s'il a ete depose dans `data/assets/branding/psg-logo.png`."""
+    return _local_image_data_uri(_LOGO_PATH)
+
+
+def psg_hero_data_uri() -> str | None:
+    """Photo de banniere reelle si deposee dans `data/assets/branding/psg-hero.png`."""
+    return _local_image_data_uri(_HERO_PATH)
+
+
 def psg_badge_svg(size: int = 56) -> str:
-    """Badge SVG original (cercle + tour Eiffel geometrique), pas le blason officiel."""
+    """Badge SVG original (cercle + tour Eiffel geometrique) : repli si pas de vrai logo."""
     return f"""
 <svg width="{size}" height="{size}" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
   <circle cx="100" cy="100" r="94" fill="{NAVY_DARK}" stroke="{RED}" stroke-width="7"/>
@@ -94,7 +122,7 @@ def _badge_data_uri(size: int = 56) -> str:
 
 
 def inject_global_css() -> str:
-    """Feuille de style globale (fond, cartes KPI, sidebar, onglets, header)."""
+    """Feuille de style globale (fond, cartes KPI, sidebar, onglets, banniere, header)."""
     return f"""
 <style>
 .stApp {{
@@ -129,25 +157,57 @@ button[data-baseweb="tab"][aria-selected="true"] {{ color: {TEXT} !important; }}
 [data-baseweb="tab-highlight"] {{ background-color: {RED} !important; }}
 [data-baseweb="tab-border"] {{ background-color: {NAVY_LIGHT} !important; }}
 
-/* Bandeau d'en-tete */
-.psg-header {{
+/* Banniere d'en-tete (photo club en fond + logo + titre) */
+.psg-hero-banner {{
+    position: relative;
+    border-radius: 18px;
+    overflow: hidden;
+    min-height: 180px;
+    margin-bottom: 22px;
+    border: 1px solid {NAVY_LIGHT};
     display: flex;
     align-items: center;
-    gap: 16px;
-    padding: 6px 0 18px 0;
-    border-bottom: 1px solid {NAVY_LIGHT};
-    margin-bottom: 18px;
+    background: linear-gradient(135deg, {NAVY} 0%, {NAVY_DARK} 100%);
 }}
-.psg-header h1 {{
+.psg-hero-banner-bg {{
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center 40%;
+}}
+.psg-hero-banner-overlay {{
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        100deg, {NAVY_DARK} 20%, rgba(11,19,48,0.80) 48%, rgba(11,19,48,0.30) 100%
+    );
+}}
+.psg-hero-banner-content {{
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 22px 32px;
+}}
+.psg-hero-banner-content img.psg-logo {{
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    background: white;
+    box-shadow: 0 0 0 3px {RED}, 0 6px 18px rgba(0,0,0,0.45);
+    flex-shrink: 0;
+}}
+.psg-hero-banner-content h1 {{
     margin: 0;
-    font-size: 1.7rem;
+    font-size: 1.9rem;
     color: {TEXT};
     letter-spacing: 0.5px;
 }}
-.psg-header p {{
-    margin: 2px 0 0 0;
-    color: {TEXT_MUTED};
-    font-size: 0.92rem;
+.psg-hero-banner-content p {{
+    margin: 4px 0 0 0;
+    color: #D7DCF2;
+    font-size: 0.95rem;
 }}
 
 /* Carte "profil joueur" avec monogramme/photo en filigrane */
@@ -201,22 +261,33 @@ button[data-baseweb="tab"][aria-selected="true"] {{ color: {TEXT} !important; }}
 """.strip()
 
 
-def header_html(subtitle: str) -> str:
-    """Bandeau d'en-tete : badge + titre + sous-titre."""
+def hero_banner_html(subtitle: str) -> str:
+    """Banniere d'en-tete : logo (reel si dispo, sinon badge dessine) + titre + photo de fond."""
+    logo_uri = psg_logo_data_uri() or _badge_data_uri(68)
+    hero_uri = psg_hero_data_uri()
+
+    bg_html = (
+        f'<div class="psg-hero-banner-bg" style="background-image: url(\'{hero_uri}\');"></div>'
+        if hero_uri
+        else ""
+    )
+
     return f"""
-<div class="psg-header">
-    <img src="{_badge_data_uri(56)}" width="56" height="56" alt="Badge PSG xG Tracker"/>
-    <div>
-        <h1>PSG Live Sports Tracker</h1>
-        <p>{subtitle}</p>
+<div class="psg-hero-banner">
+    {bg_html}
+    <div class="psg-hero-banner-overlay"></div>
+    <div class="psg-hero-banner-content">
+        <img class="psg-logo" src="{logo_uri}" alt="Logo PSG"/>
+        <div>
+            <h1>PSG Live Sports Tracker</h1>
+            <p>{subtitle}</p>
+        </div>
     </div>
 </div>
 """.strip()
 
 
-def player_hero_html(
-    name: str, subtitle: str, photo_data_uri: str | None
-) -> str:
+def player_hero_html(name: str, subtitle: str, photo_data_uri: str | None) -> str:
     """Carte d'en-tete du profil joueur, avec photo (si dispo) ou monogramme en filigrane."""
     if photo_data_uri:
         bg_html = (
