@@ -10,6 +10,7 @@ from pathlib import Path
 
 import duckdb
 import pandas as pd
+import shap
 import streamlit as st
 
 from psg_tracker.features.engineering import build_feature_matrix
@@ -66,3 +67,20 @@ def load_model(model_path: str) -> XGModel:
     model = XGModel()
     model.load(Path(model_path))
     return model
+
+
+@st.cache_resource(show_spinner="Preparation de l'explicabilite SHAP...")
+def get_shap_explainer(model_path: str) -> shap.TreeExplainer:
+    """Construit (une seule fois) le `TreeExplainer` SHAP pour le modele charge.
+
+    Optimisation : `shap.TreeExplainer(...)` parcourt tout l'ensemble
+    d'arbres XGBoost a la construction (non-negligeable pour 200 arbres).
+    Sans ce cache, `psg_tracker.models.explainability.explain_shot` en
+    reconstruit un nouveau a chaque interaction (ex. changement de tir
+    selectionne), donc a chaque rerun du script Streamlit. Mis en cache une
+    fois pour toute la session ici, puis reutilise directement (sans passer
+    par `explain_shot`, qui reste la version "simple" pour un usage hors
+    dashboard/notebook).
+    """
+    model = load_model(model_path)
+    return shap.TreeExplainer(model.raw_model)

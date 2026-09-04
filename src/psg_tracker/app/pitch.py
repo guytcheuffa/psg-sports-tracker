@@ -12,7 +12,10 @@ from __future__ import annotations
 import numpy as np
 import plotly.graph_objects as go
 
-_PITCH_LINE_COLOR = "rgba(148, 163, 184, 0.6)"  # slate-400, sobre sur fond clair/sombre
+from psg_tracker.app.theme import GOLD, NAVY
+
+_PITCH_LINE_COLOR = "rgba(217, 164, 65, 0.35)"  # GOLD attenue : sobre sur le fond fonce
+_PITCH_FILL_COLOR = NAVY
 _HALF_X_MIN = 60.0
 _PITCH_X_MAX = 120.0
 _PITCH_Y_MIN = 0.0
@@ -20,8 +23,10 @@ _PITCH_Y_MAX = 80.0
 _GOAL_Y_CENTER = 40.0
 
 
-def _rect(x0: float, x1: float, y0: float, y1: float) -> dict[str, object]:
-    return {
+def _rect(
+    x0: float, x1: float, y0: float, y1: float, fill: str | None = None
+) -> dict[str, object]:
+    shape: dict[str, object] = {
         "type": "rect",
         "x0": x0,
         "x1": x1,
@@ -30,6 +35,9 @@ def _rect(x0: float, x1: float, y0: float, y1: float) -> dict[str, object]:
         "line": {"color": _PITCH_LINE_COLOR, "width": 1.5},
         "layer": "below",
     }
+    if fill is not None:
+        shape["fillcolor"] = fill
+    return shape
 
 
 def half_pitch_figure() -> go.Figure:
@@ -41,8 +49,18 @@ def half_pitch_figure() -> go.Figure:
     fig = go.Figure()
 
     shapes: list[dict[str, object]] = [
-        # Contour du demi-terrain
-        _rect(_HALF_X_MIN, _PITCH_X_MAX, _PITCH_Y_MIN, _PITCH_Y_MAX),
+        # Pelouse (fond plein, coherent avec le theme sombre du dashboard)
+        _rect(_HALF_X_MIN, _PITCH_X_MAX, _PITCH_Y_MIN, _PITCH_Y_MAX, fill=_PITCH_FILL_COLOR),
+        # Ligne mediane
+        {
+            "type": "line",
+            "x0": _HALF_X_MIN,
+            "x1": _HALF_X_MIN,
+            "y0": _PITCH_Y_MIN,
+            "y1": _PITCH_Y_MAX,
+            "line": {"color": _PITCH_LINE_COLOR, "width": 1.5},
+            "layer": "below",
+        },
         # Surface de reparation (18 yards)
         _rect(102.0, _PITCH_X_MAX, 18.0, 62.0),
         # Surface de but (6 yards)
@@ -57,7 +75,7 @@ def half_pitch_figure() -> go.Figure:
             "x1": _PITCH_X_MAX,
             "y0": 36.0,
             "y1": 44.0,
-            "line": {"color": _PITCH_LINE_COLOR, "width": 4},
+            "line": {"color": GOLD, "width": 4},
             "layer": "below",
         }
     )

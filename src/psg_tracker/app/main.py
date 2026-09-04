@@ -1,8 +1,8 @@
 """Point d'entree de l'application Streamlit : dashboard xG du PSG.
 
-Trois blocs : shotmap (tous les tirs filtres, positionnes sur le dernier
-tiers offensif), classement buts reels vs xG cumule par joueur (sur/sous-
-performance), et explicabilite SHAP d'un tir individuel selectionne.
+Quatre onglets : vue d'ensemble (KPIs + shotmap), classement buts reels vs
+xG cumule par joueur, profil d'un joueur (carte avec photo/monogramme en
+filigrane), et explicabilite SHAP d'un tir individuel selectionne.
 """
 
 from __future__ import annotations
@@ -13,10 +13,10 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from psg_tracker.app.data_loader import load_model, load_shots_with_xg
+from psg_tracker.app import theme
+from psg_tracker.app.data_loader import get_shap_explainer, load_model, load_shots_with_xg
 from psg_tracker.app.pitch import half_pitch_figure
 from psg_tracker.config import settings
-from psg_tracker.models.explainability import explain_shot
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _DB_PATH = (
@@ -29,9 +29,17 @@ _MODEL_PATH = (
 )
 
 _OUTCOME_COLORS = {
-    True: "#22c55e",  # but : vert
-    False: "#94a3b8",  # tir non converti : gris neutre
+    True: theme.GOLD,  # but : accent chaud, se detache de la pelouse
+    False: theme.TEXT_MUTED,  # tir non converti : neutre
 }
+
+
+def _themed_figure(fig: go.Figure, **overrides: object) -> go.Figure:
+    """Applique le template de couleurs commun, puis des overrides specifiques."""
+    fig.update_layout(**theme.plotly_template())
+    if overrides:
+        fig.update_layout(**overrides)
+    return fig
 
 
 def _check_prerequisites() -> bool:
@@ -53,7 +61,7 @@ def _check_prerequisites() -> bool:
 
 
 def _apply_filters(shots: pd.DataFrame) -> pd.DataFrame:
-    """Filtres sidebar : source, competition, joueur. Retourne le sous-ensemble filtre."""
+    """Filtres sidebar : source, competition. Retourne le sous-ensemble filtre."""
     st.sidebar.header("Filtres")
 
     sources = sorted(shots["source"].unique())
@@ -64,18 +72,9 @@ def _apply_filters(shots: pd.DataFrame) -> pd.DataFrame:
         "Competition", competitions, default=competitions
     )
 
-    filtered = shots[
+    return shots[
         shots["source"].isin(selected_sources) & shots["competition"].isin(selected_competitions)
     ]
-
-    players = sorted(filtered["player_name"].unique())
-    selected_players = st.sidebar.multiselect(
-        "Joueur (vide = tous)", players, default=[]
-    )
-    if selected_players:
-        filtered = filtered[filtered["player_name"].isin(selected_players)]
-
-    return filtered
 
 
 def _render_kpis(shots: pd.DataFrame) -> None:
@@ -95,7 +94,7 @@ def _render_kpis(shots: pd.DataFrame) -> None:
     )
 
 
-def _render_shotmap(shots: pd.DataFrame) -> None:
+def _render_shotmap(shots: pd.DataFrame, height: int = 520) -> None:
     """Shotmap : position des tirs sur le dernier tiers, taille = xG, couleur = but/non-but."""
     fig = half_pitch_figure()
 
@@ -109,8 +108,8 @@ def _render_shotmap(shots: pd.DataFrame) -> None:
                 marker={
                     "size": (group["xg_pred"] * 40 + 6),
                     "color": _OUTCOME_COLORS[bool(is_goal)],
-                    "line": {"color": "white", "width": 1},
-                    "opacity": 0.85,
+                    "line": {"color": theme.TEXT, "width": 1},
+                    "opacity": 0.88,
                 },
                 customdata=group[["player_name", "minute", "shot_type", "xg_pred", "source"]],
                 hovertemplate=(
@@ -121,8 +120,8 @@ def _render_shotmap(shots: pd.DataFrame) -> None:
             )
         )
 
-    fig.update_layout(height=520, legend={"orientation": "h", "y": -0.05})
-    st.plotly_chart(fig, width='stretch')
+    _themed_figure(fig, height=height, legend={"orientation": "h", "y": -0.05})
+    st.plotly_chart(fig, width="stretch")
 
 
 def _render_leaderboard(shots: pd.DataFrame, top_n: int = 10) -> None:
@@ -139,9 +138,49 @@ def _render_leaderboard(shots: pd.DataFrame, top_n: int = 10) -> None:
     fig = go.Figure()
     fig.add_trace(go.Bar(x=by_player.index, y=by_player["buts"], name="Buts reels"))
     fig.add_trace(go.Bar(x=by_player.index, y=by_player["xg"], name="xG cumule"))
-    fig.update_layout(barmode="group", height=380, xaxis_tickangle=-30)
-    st.plotly_chart(fig, width='stretch')
-    st.dataframe(by_player, width='stretch')
+    _themed_figure(fig, barmode="group", height=380, xaxis_tickangle=-30)
+    st.plotly_chart(fig, width="stretch")
+    st.dataframe(by_player, width="stretch")
+
+
+def _render_player_profile(shots: pd.DataFrame) -> None:
+    """Carte de profil pour un joueur choisi : photo/monogramme, stats, mini-shotmap."""
+    if shots.empty:
+        st.info("Aucun tir avec les filtres actuels.")
+        return
+
+    players = sorted(shots["player_name"].unique())
+    default_index = 0
+    player = st.selectbox("Choisir un joueur", options=players, index=default_index)
+
+    player_shots = shots[shots["player_name"] == player]
+    n_matches = player_shots[["source", "match_date"]].drop_duplicates().shape[0]
+    n_shots = len(player_shots)
+    n_goals = int(player_shots["is_goal"].sum())
+    xg_total = float(player_shots["xg_pred"].sum())
+
+    st.markdown(
+        theme.player_hero_html(
+            name=player,
+            subtitle=f"{n_matches} match(s) - {n_shots} tir(s) dans la selection",
+            photo_data_uri=theme.player_photo_data_uri(player),
+        ),
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "Photo affichee uniquement si un fichier est depose localement dans "
+        "`data/assets/players/` (non fourni par defaut, cf. `app/theme.py`) : "
+        "sinon, monogramme genere en filigrane."
+    )
+
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Tirs", n_shots)
+    col2.metric("Buts reels", n_goals)
+    col3.metric("xG cumule", f"{xg_total:.2f}")
+    col4.metric("Buts - xG", f"{n_goals - xg_total:+.2f}")
+
+    st.markdown("##### Tirs de ce joueur")
+    _render_shotmap(player_shots, height=420)
 
 
 def _render_shot_explainer(shots: pd.DataFrame, model_path: Path) -> None:
@@ -151,6 +190,7 @@ def _render_shot_explainer(shots: pd.DataFrame, model_path: Path) -> None:
         return
 
     model = load_model(str(model_path))
+    explainer = get_shap_explainer(str(model_path))
 
     labels = (
         shots["player_name"]
@@ -165,7 +205,10 @@ def _render_shot_explainer(shots: pd.DataFrame, model_path: Path) -> None:
         "Choisir un tir", options=shots.index, format_func=lambda i: labels.loc[i]
     )
 
-    contributions = explain_shot(model, shots, choice)
+    x = shots.loc[[choice]].reindex(columns=model.feature_columns, fill_value=0)
+    shap_values = explainer.shap_values(x)
+    contributions = pd.Series(shap_values[0], index=model.feature_columns)
+    contributions = contributions.reindex(contributions.abs().sort_values(ascending=False).index)
     predicted_xg = float(shots.loc[choice, "xg_pred"])
 
     st.metric("xG predit pour ce tir", f"{predicted_xg:.2f}")
@@ -175,15 +218,18 @@ def _render_shot_explainer(shots: pd.DataFrame, model_path: Path) -> None:
             x=contributions.values,
             y=contributions.index,
             orientation="h",
-            marker={"color": ["#22c55e" if v > 0 else "#ef4444" for v in contributions.values]},
+            marker={
+                "color": [theme.GOLD if v > 0 else theme.RED for v in contributions.values]
+            },
         )
     )
-    fig.update_layout(
+    _themed_figure(
+        fig,
         height=320,
         xaxis_title="Contribution SHAP (log-odds)",
         margin={"l": 10, "r": 10, "t": 10, "b": 10},
     )
-    st.plotly_chart(fig, width='stretch')
+    st.plotly_chart(fig, width="stretch")
     st.caption(
         "Valeurs en espace log-odds (sortie brute de l'arbre) : positif pousse vers "
         "'plus susceptible d'etre un but', negatif vers l'inverse."
@@ -193,24 +239,40 @@ def _render_shot_explainer(shots: pd.DataFrame, model_path: Path) -> None:
 def main() -> None:
     """Lance le dashboard Streamlit."""
     st.set_page_config(page_title="PSG Live Tracker", layout="wide", page_icon="⚽")
-    st.title("PSG Live Sports Tracker — xG Analytics")
+    st.markdown(theme.inject_global_css(), unsafe_allow_html=True)
 
     if not _check_prerequisites():
+        st.markdown(theme.header_html("Pipeline de donnees xG PSG"), unsafe_allow_html=True)
         return
 
     shots = load_shots_with_xg(str(_DB_PATH), str(_MODEL_PATH))
-    filtered = _apply_filters(shots)
+    st.markdown(
+        theme.header_html(f"{len(shots)} tirs en base - analytics xG en temps quasi reel"),
+        unsafe_allow_html=True,
+    )
 
+    filtered = _apply_filters(shots)
     _render_kpis(filtered)
 
-    st.subheader("Shotmap")
-    _render_shotmap(filtered)
+    tab_overview, tab_leaderboard, tab_player, tab_shap = st.tabs(
+        ["Vue d'ensemble", "Classement", "Profil joueur", "Explicabilite (SHAP)"]
+    )
 
-    st.subheader("Buts reels vs xG cumule (top 10 tireurs)")
-    _render_leaderboard(filtered)
+    with tab_overview:
+        st.subheader("Shotmap")
+        _render_shotmap(filtered)
 
-    st.subheader("Explicabilite d'un tir (SHAP)")
-    _render_shot_explainer(filtered, _MODEL_PATH)
+    with tab_leaderboard:
+        st.subheader("Buts reels vs xG cumule (top 10 tireurs)")
+        _render_leaderboard(filtered)
+
+    with tab_player:
+        st.subheader("Profil joueur")
+        _render_player_profile(filtered)
+
+    with tab_shap:
+        st.subheader("Explicabilite d'un tir")
+        _render_shot_explainer(filtered, _MODEL_PATH)
 
 
 if __name__ == "__main__":

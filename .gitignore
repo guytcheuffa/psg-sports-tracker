@@ -18,6 +18,10 @@ data/processed/*
 !data/processed/.gitkeep
 *.duckdb
 
+# Photos joueurs (usage local/prive uniquement, cf. app/theme.py player_photo_data_uri)
+data/assets/players/*
+!data/assets/players/.gitkeep
+
 # Notebooks checkpoints
 .ipynb_checkpoints/
 

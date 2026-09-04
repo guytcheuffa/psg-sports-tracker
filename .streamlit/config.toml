@@ -1,0 +1,13 @@
+# Theme sombre aux couleurs du club (bleu nuit + rouge), coherent avec
+# app/theme.py (CSS custom + template Plotly). Voir ce fichier pour la
+# palette complete.
+[theme]
+base = "dark"
+primaryColor = "#E30613"
+backgroundColor = "#0B1330"
+secondaryBackgroundColor = "#141F4D"
+textColor = "#F5F6FA"
+font = "sans serif"
+
+[server]
+headless = true
