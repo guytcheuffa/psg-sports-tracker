@@ -129,6 +129,25 @@ def test_statsbomb_and_understat_matches_do_not_collide(tmp_path: Path) -> None:
     assert count == (2,)
 
 
+def test_get_match_dates_returns_dates_for_given_source_only(tmp_path: Path) -> None:
+    with DuckDBManager(db_path=tmp_path / "test.duckdb") as manager:
+        manager.apply_ddl(DDL_PATH)
+        manager.insert_matches(
+            [
+                _match(match_id=1, source="statsbomb"),  # 2026-08-30
+                _match(match_id=2, source="understat"),  # meme date, autre source
+            ]
+        )
+
+        statsbomb_dates = manager.get_match_dates("statsbomb")
+        pl_dates = manager.get_match_dates("understat")
+        empty_dates = manager.get_match_dates("nonexistent_source")
+
+    assert statsbomb_dates == {"2026-08-30"}
+    assert pl_dates == {"2026-08-30"}
+    assert empty_dates == set()
+
+
 def test_close_is_idempotent(tmp_path: Path) -> None:
     manager = DuckDBManager(db_path=tmp_path / "test.duckdb")
     manager.connect()

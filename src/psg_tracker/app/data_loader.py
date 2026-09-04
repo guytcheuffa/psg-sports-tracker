@@ -30,16 +30,41 @@ _SHOTS_QUERY = """
 # Meme joueur, nom different selon la source : StatsBomb utilise le nom
 # complet a l'etat civil, Understat le nom d'usage/media (ex. "Achraf
 # Hakimi Mouh" vs "Achraf Hakimi"). Sans harmonisation, un meme joueur
-# apparait deux fois dans le classement et le selecteur de profil. Recense
-# manuellement en comparant les valeurs distinctes de `player_name` par
-# source (requete DuckDB ad hoc) - a completer si l'ingestion de futures
-# saisons revele de nouveaux doublons.
+# apparait deux fois dans le classement et le selecteur de profil.
+#
+# Recense par rapprochement de chaines (difflib.SequenceMatcher, seuil
+# ~0.6) sur les noms distincts de `shots.player_name`, verifie manuellement
+# paire par paire pour ecarter les faux positifs (ex. "Gonçalo Ramos" vs
+# "Sergio Ramos" : deux joueurs distincts qui partagent juste un nom de
+# famille). Cible en general le nom d'usage Understat (plus court), sauf
+# quand Understat omet un accent que StatsBomb a correctement (ex. "Jean-
+# Kevin Augustin" -> "Jean-Kévin Augustin") : dans ce cas l'orthographe
+# correcte l'emporte. A completer si l'ingestion de futures saisons revele
+# de nouveaux doublons (rejouer le rapprochement difflib sur les noms
+# distincts en base).
 _PLAYER_NAME_ALIASES: dict[str, str] = {
     "Achraf Hakimi Mouh": "Achraf Hakimi",
+    "Ángel Fabián Di María Hernández": "Ángel Di María",
+    "Carlos Soler Barragán": "Carlos Soler",
+    "Danilo Luís Hélio Pereira": "Danilo Pereira",
+    "Edinson Roberto Cavani Gómez": "Edinson Cavani",
     "Fabián Ruiz Peña": "Fabián",
+    "Idrissa Gana Gueye": "Idrissa Gueye",
+    "Javier Matías Pastore": "Javier Pastore",
+    "Jean-Kevin Augustin": "Jean-Kévin Augustin",
+    "Juan Bernat Velasco": "Juan Bernat",
+    "Kylian Mbappe-Lottin": "Kylian Mbappé Lottin",
+    "Leandro Daniel Paredes": "Leandro Paredes",
     "Marcos Aoás Corrêa": "Marquinhos",
+    "Mauro Emanuel Icardi Rivero": "Mauro Icardi",
+    "Nordi Mukiele Mulere": "Nordi Mukiele",
+    "Pablo Sarabia García": "Pablo Sarabia",
+    "Renato Júnior Luz Sanches": "Renato Sanches",
+    "Sergio Ramos García": "Sergio Ramos",
+    "Thiago Emiliano da Silva": "Thiago Silva",
     "Vitor Machado Ferreira": "Vitinha",
     "Warren Zaire Emery": "Warren Zaïre-Emery",
+    "Zlatan Ibrahimovic": "Zlatan Ibrahimović",
 }
 
 

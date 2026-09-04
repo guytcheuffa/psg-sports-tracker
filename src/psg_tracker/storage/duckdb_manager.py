@@ -54,6 +54,19 @@ class DuckDBManager:
         self.connect().execute(sql)
         logger.info("DDL applique: %s", sql_path)
 
+    def get_match_dates(self, source: str) -> set[str]:
+        """Renvoie l'ensemble des dates (YYYY-MM-DD) des matches deja en base pour `source`.
+
+        Sert a deduplication inter-sources a l'ingestion (cf. `scripts/ingest.py`
+        `ingest_understat`) : eviter de compter deux fois un meme match reel
+        quand plusieurs sources le couvrent a la meme date.
+        """
+        rows = self.connect().execute(
+            "SELECT DISTINCT CAST(match_date AS VARCHAR) FROM matches WHERE source = ?",
+            [source],
+        ).fetchall()
+        return {row[0] for row in rows}
+
     def insert_matches(self, matches: Sequence[MatchSummary]) -> None:
         """Insere (ou remplace) une liste de matches dans la table `matches`."""
         if not matches:
