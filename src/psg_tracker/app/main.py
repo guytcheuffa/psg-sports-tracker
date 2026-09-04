@@ -60,16 +60,33 @@ def _check_prerequisites() -> bool:
     return True
 
 
+_SOURCE_LABELS = {"statsbomb": "StatsBomb", "understat": "Understat"}
+
+
 def _apply_filters(shots: pd.DataFrame) -> pd.DataFrame:
-    """Filtres sidebar : source, competition. Retourne le sous-ensemble filtre."""
-    st.sidebar.header("Filtres")
+    """Sidebar complete : identite visuelle, filtres (source, competition), infos dataset."""
+    st.sidebar.markdown(theme.sidebar_brand_html(), unsafe_allow_html=True)
 
     sources = sorted(shots["source"].unique())
+    st.sidebar.markdown(
+        theme.sidebar_badges_html([_SOURCE_LABELS.get(s, s) for s in sources]),
+        unsafe_allow_html=True,
+    )
+
+    st.sidebar.markdown(
+        '<div class="sidebar-section-title">Filtres</div>', unsafe_allow_html=True
+    )
     selected_sources = st.sidebar.multiselect("Source", sources, default=sources)
 
     competitions = sorted(shots["competition"].unique())
     selected_competitions = st.sidebar.multiselect(
         "Competition", competitions, default=competitions
+    )
+
+    n_matches = shots[["source", "match_date"]].drop_duplicates().shape[0]
+    seasons = ", ".join(sorted(shots["season"].astype(str).unique()))
+    st.sidebar.markdown(
+        theme.sidebar_footer_html(len(shots), n_matches, seasons), unsafe_allow_html=True
     )
 
     return shots[

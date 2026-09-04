@@ -18,12 +18,13 @@ data/processed/*
 !data/processed/.gitkeep
 *.duckdb
 
-# Assets visuels (logo/banniere club, photos joueurs) : usage local/prive
-# uniquement (images/marques protegees), cf. app/theme.py.
+# Photos joueurs : usage local/prive uniquement par defaut (photos de
+# personnes identifiables, droit a l'image), cf. app/theme.py.
 data/assets/players/*
 !data/assets/players/.gitkeep
-data/assets/branding/*
-!data/assets/branding/.gitkeep
+
+# Logo/banniere club (data/assets/branding/) : publies volontairement par
+# l'utilisateur (portfolio personnel, usage non commercial), cf. app/theme.py.
 
 # Notebooks checkpoints
 .ipynb_checkpoints/

@@ -27,6 +27,21 @@ _SHOTS_QUERY = """
     ORDER BY m.match_date, s.minute
 """
 
+# Meme joueur, nom different selon la source : StatsBomb utilise le nom
+# complet a l'etat civil, Understat le nom d'usage/media (ex. "Achraf
+# Hakimi Mouh" vs "Achraf Hakimi"). Sans harmonisation, un meme joueur
+# apparait deux fois dans le classement et le selecteur de profil. Recense
+# manuellement en comparant les valeurs distinctes de `player_name` par
+# source (requete DuckDB ad hoc) - a completer si l'ingestion de futures
+# saisons revele de nouveaux doublons.
+_PLAYER_NAME_ALIASES: dict[str, str] = {
+    "Achraf Hakimi Mouh": "Achraf Hakimi",
+    "Fabián Ruiz Peña": "Fabián",
+    "Marcos Aoás Corrêa": "Marquinhos",
+    "Vitor Machado Ferreira": "Vitinha",
+    "Warren Zaire Emery": "Warren Zaïre-Emery",
+}
+
 
 @st.cache_data(show_spinner="Chargement des tirs depuis DuckDB...")
 def load_shots_with_xg(db_path: str, model_path: str) -> pd.DataFrame:
@@ -51,6 +66,8 @@ def load_shots_with_xg(db_path: str, model_path: str) -> pd.DataFrame:
 
     if shots.empty:
         return shots
+
+    shots["player_name"] = shots["player_name"].replace(_PLAYER_NAME_ALIASES)
 
     features = build_feature_matrix(shots)
 

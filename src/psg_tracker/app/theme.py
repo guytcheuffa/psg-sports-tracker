@@ -6,15 +6,17 @@ Regroupe tout ce qui est pure presentation (aucune logique metier) pour que
 Logo/banniere club : `psg_logo_data_uri`/`psg_hero_data_uri` cherchent des
 fichiers locaux optionnels sous `data/assets/branding/` (voir constantes
 `_LOGO_PATH`/`_HERO_PATH`). Le blason et les visuels du club sont des
-marques/images protegees : ce depot ne les fournit pas par defaut (dossier
-non versionne, cf. `.gitignore`) - c'est a l'utilisateur de les y deposer
-s'il en a les droits pour son usage (portfolio personnel). A defaut de
-fichier, `psg_badge_svg` (dessin original, cercle + tour Eiffel stylisee)
-sert de repli pour que le dashboard reste fonctionnel et publiable tel quel.
+marques/images protegees ; l'utilisateur les a fournis lui-meme et choisi
+de les publier dans ce depot (portfolio personnel, usage non commercial) -
+ils sont donc versionnes (cf. `.gitignore`). A defaut de fichier, le repo
+reste fonctionnel : `psg_badge_svg` (dessin original, cercle + tour Eiffel
+stylisee) sert de repli.
 
 Portraits joueur : meme logique via `player_photo_data_uri`
-(`data/assets/players/<slug>.{jpg,png}`) ; a defaut, un monogramme geant en
-filigrane genere en CSS pur (`player_hero_html`).
+(`data/assets/players/<slug>.{jpg,png}`), mais ce dossier reste non
+versionne par defaut (photos de personnes identifiables, droit a l'image) ;
+a defaut de fichier, un monogramme geant en filigrane genere en CSS pur
+(`player_hero_html`).
 """
 
 from __future__ import annotations
@@ -257,6 +259,73 @@ button[data-baseweb="tab"][aria-selected="true"] {{ color: {TEXT} !important; }}
     text-transform: uppercase;
     margin-bottom: 14px;
 }}
+
+/* Sidebar : bloc marque + badges + pied de page (comble le vide visuel) */
+.sidebar-brand {{
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 16px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid {NAVY_LIGHT};
+}}
+.sidebar-brand img {{
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: white;
+    box-shadow: 0 0 0 2px {RED};
+    flex-shrink: 0;
+}}
+.sidebar-brand h3 {{
+    margin: 0;
+    font-size: 0.92rem;
+    color: {TEXT};
+    letter-spacing: 0.5px;
+}}
+.sidebar-brand p {{
+    margin: 2px 0 0 0;
+    font-size: 0.7rem;
+    color: {TEXT_MUTED};
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}}
+
+.sidebar-section-title {{
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: {GOLD};
+    font-weight: 700;
+    margin: 4px 0 6px 0;
+}}
+
+.sidebar-badge-row {{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 6px 0 16px 0;
+}}
+.sidebar-badge {{
+    background: {NAVY};
+    border: 1px solid {NAVY_LIGHT};
+    color: {TEXT_MUTED};
+    font-size: 0.7rem;
+    padding: 3px 10px;
+    border-radius: 999px;
+}}
+
+.sidebar-footer {{
+    margin-top: 22px;
+    padding-top: 14px;
+    border-top: 1px solid {NAVY_LIGHT};
+}}
+.sidebar-footer p {{
+    font-size: 0.72rem;
+    color: {TEXT_MUTED};
+    line-height: 1.5;
+    margin: 3px 0;
+}}
 </style>
 """.strip()
 
@@ -283,6 +352,38 @@ def hero_banner_html(subtitle: str) -> str:
             <p>{subtitle}</p>
         </div>
     </div>
+</div>
+""".strip()
+
+
+def sidebar_brand_html() -> str:
+    """Bloc d'entete de la sidebar : logo + nom du projet (comble le vide visuel par defaut)."""
+    logo_uri = psg_logo_data_uri() or _badge_data_uri(42)
+    return f"""
+<div class="sidebar-brand">
+    <img src="{logo_uri}" alt="Logo PSG"/>
+    <div>
+        <h3>PSG XG TRACKER</h3>
+        <p>Analytics tirs &amp; xG</p>
+    </div>
+</div>
+""".strip()
+
+
+def sidebar_badges_html(labels: list[str]) -> str:
+    """Ligne de badges pour la sidebar (ex. sources de donnees actives)."""
+    badges = "".join(f'<span class="sidebar-badge">{label}</span>' for label in labels)
+    return f'<div class="sidebar-badge-row">{badges}</div>'
+
+
+def sidebar_footer_html(n_shots: int, n_matches: int, seasons: str) -> str:
+    """Bloc "a propos" en pied de sidebar : volumetrie du dataset + stack technique."""
+    return f"""
+<div class="sidebar-footer">
+    <div class="sidebar-section-title">A propos</div>
+    <p>{n_shots} tirs sur {n_matches} matchs ({seasons}).</p>
+    <p>Modele XGBoost + explicabilite SHAP.</p>
+    <p>Donnees : StatsBomb Open Data (historique) + Understat (saison en cours).</p>
 </div>
 """.strip()
 
