@@ -48,6 +48,7 @@ _SHOTS_QUERY = """
 # en base).
 _PLAYER_NAME_ALIASES: dict[str, str] = {
     "Achraf Hakimi Mouh": "Achraf Hakimi",
+    "Ander Herrera Agüera": "Ander Herrera",
     "Ángel Fabián Di María Hernández": "Ángel Di María",
     "Carlos Soler Barragán": "Carlos Soler",
     "Danilo Luís Hélio Pereira": "Danilo Pereira",
