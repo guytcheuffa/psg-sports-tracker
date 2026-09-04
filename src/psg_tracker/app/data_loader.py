@@ -137,6 +137,71 @@ def load_player_positions(db_path: str) -> pd.DataFrame:
     )
 
 
+_DETAILED_POSITION_LABELS: dict[str, str] = {
+    "Goalkeeper": "Gardien",
+    "Center Back": "Defenseur central",
+    "Left Center Back": "Defenseur central gauche",
+    "Right Center Back": "Defenseur central droit",
+    "Left Back": "Arriere gauche",
+    "Right Back": "Arriere droit",
+    "Left Wing Back": "Piston gauche",
+    "Right Wing Back": "Piston droit",
+    "Center Defensive Midfield": "Milieu defensif central",
+    "Left Defensive Midfield": "Milieu defensif gauche",
+    "Right Defensive Midfield": "Milieu defensif droit",
+    "Left Center Midfield": "Milieu central gauche",
+    "Right Center Midfield": "Milieu central droit",
+    "Left Midfield": "Milieu gauche",
+    "Right Midfield": "Milieu droit",
+    "Center Attacking Midfield": "Milieu offensif central",
+    "Left Attacking Midfield": "Milieu offensif gauche",
+    "Right Attacking Midfield": "Milieu offensif droit",
+    "Left Wing": "Ailier gauche",
+    "Right Wing": "Ailier droit",
+    "Center Forward": "Avant-centre",
+    "Left Center Forward": "Avant-centre gauche",
+    "Right Center Forward": "Avant-centre droit",
+}
+
+_DETAILED_POSITIONS_QUERY = (
+    "SELECT player_name, match_id, position_detailed FROM player_positions_detailed"
+)
+
+
+def load_detailed_positions(db_path: str) -> pd.DataFrame:
+    """Poste detaille dominant par joueur (StatsBomb, granularite ailier/lateral/etc).
+
+    Source distincte de `load_player_positions` (Understat, 4 categories) :
+    ici 22 postes StatsBomb traduits, mais couverture partielle - seulement
+    les joueurs ayant dispute au moins un des 95 matchs StatsBomb ingeres
+    (3 saisons sur les 12 du corpus complet), cf.
+    `DuckDBManager.insert_player_positions_detailed`. Le poste "dominant"
+    est le plus frequent sur les matchs StatsBomb disponibles pour ce
+    joueur (pas de ponderation par temps de jeu, StatsBomb Open Data ne le
+    fournit pas facilement a ce niveau).
+    """
+    conn = duckdb.connect(db_path, read_only=True)
+    try:
+        raw = conn.execute(_DETAILED_POSITIONS_QUERY).fetchdf()
+    finally:
+        conn.close()
+
+    if raw.empty:
+        return pd.DataFrame(columns=["player_name", "position_detailed"])
+
+    raw["player_name"] = raw["player_name"].replace(_PLAYER_NAME_ALIASES)
+    raw["position_detailed"] = raw["position_detailed"].map(_DETAILED_POSITION_LABELS)
+    raw = raw.dropna(subset=["position_detailed"])
+    if raw.empty:
+        return pd.DataFrame(columns=["player_name", "position_detailed"])
+
+    return (
+        raw.groupby("player_name")["position_detailed"]
+        .agg(lambda s: s.value_counts().idxmax())
+        .reset_index()
+    )
+
+
 @st.cache_data(show_spinner="Chargement des tirs depuis DuckDB...")
 def load_shots_with_xg(db_path: str, model_path: str) -> pd.DataFrame:
     """Charge tous les tirs (toutes sources) et ajoute la colonne `xg_pred`.
@@ -166,6 +231,10 @@ def load_shots_with_xg(db_path: str, model_path: str) -> pd.DataFrame:
     positions = load_player_positions(db_path)
     shots = shots.merge(positions, on="player_name", how="left")
     shots["position"] = shots["position"].fillna("Inconnu")
+
+    detailed_positions = load_detailed_positions(db_path)
+    shots = shots.merge(detailed_positions, on="player_name", how="left")
+    shots["position_detailed"] = shots["position_detailed"].fillna("Inconnu")
 
     features = build_feature_matrix(shots)
 

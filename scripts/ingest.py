@@ -91,6 +91,19 @@ def _ingest_statsbomb_competition(
             manager.insert_shots(shots)
             n_shots += len(shots)
 
+        try:
+            lineup = client.get_lineups(match.match_id, team_name=team_name)
+        except requests.HTTPError as exc:
+            logger.warning("Composition indisponible pour match_id=%d: %s", match.match_id, exc)
+            lineup = []
+
+        position_rows = [
+            (str(p["player_name"]), match.match_id, str(p["positions"][0]["position"]))
+            for p in lineup
+            if p.get("positions")
+        ]
+        manager.insert_player_positions_detailed(position_rows)
+
         time.sleep(_REQUEST_DELAY_SECONDS)
 
     logger.info(

@@ -22,6 +22,13 @@ CREATE TABLE IF NOT EXISTS player_positions (
     PRIMARY KEY (player_name, season)
 );
 
+CREATE TABLE IF NOT EXISTS player_positions_detailed (
+    player_name         VARCHAR NOT NULL,  -- nom StatsBomb (harmonise cote app)
+    match_id             BIGINT NOT NULL,   -- id StatsBomb du match
+    position_detailed   VARCHAR,           -- ex: "Right Wing", "Center Back"
+    PRIMARY KEY (player_name, match_id)
+);
+
 CREATE TABLE IF NOT EXISTS shots (
     event_id     VARCHAR PRIMARY KEY,  -- prefixe par source, deja unique globalement
     match_id     BIGINT,

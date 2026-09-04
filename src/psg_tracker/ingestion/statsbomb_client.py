@@ -86,6 +86,38 @@ class StatsBombClient:
         )
         return summaries
 
+    def get_lineups(
+        self,
+        match_id: int,
+        team_name: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Composition d'une equipe pour un match : joueurs + poste(s) joue(s).
+
+        StatsBomb fournit un poste detaille par joueur (ex: "Right Wing",
+        "Center Back", 24 valeurs possibles), contrairement aux tirs deja
+        ingeres qui n'en gardent aucune trace. Un joueur peut avoir
+        plusieurs entrees dans `positions` s'il a change de poste en cours
+        de match (changement tactique, remplacement a un autre poste) :
+        laisse tel quel ici, la logique de choix du "poste principal" est
+        du ressort de l'ingestion (cf. `scripts/ingest.py`).
+
+        Args:
+            match_id: id StatsBomb du match.
+            team_name: si fourni, ne garde que la composition de cette equipe.
+        """
+        raw_teams = self._get_json(f"lineups/{match_id}.json")
+        lineup: list[dict[str, Any]] = []
+
+        for team in raw_teams:
+            if team_name is not None and team.get("team_name") != team_name:
+                continue
+            lineup.extend(team.get("lineup", []))
+
+        logger.info(
+            "get_lineups: %d joueur(s) (match_id=%d, team=%s)", len(lineup), match_id, team_name
+        )
+        return lineup
+
     def get_shot_events(
         self,
         match_id: int,

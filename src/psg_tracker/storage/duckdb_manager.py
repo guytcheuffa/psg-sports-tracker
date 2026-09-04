@@ -19,6 +19,11 @@ _INSERT_MATCH_SQL = """
     VALUES (?, ?, CAST(? AS DATE), ?, ?, ?, ?)
 """
 
+_INSERT_PLAYER_POSITION_DETAILED_SQL = """
+    INSERT OR REPLACE INTO player_positions_detailed (player_name, match_id, position_detailed)
+    VALUES (?, ?, ?)
+"""
+
 _INSERT_PLAYER_POSITION_SQL = """
     INSERT OR REPLACE INTO player_positions (player_name, season, position_raw)
     VALUES (?, ?, ?)
@@ -82,6 +87,20 @@ class DuckDBManager:
         ]
         self.connect().executemany(_INSERT_MATCH_SQL, rows)
         logger.info("insert_matches: %d match(es) inseres", len(matches))
+
+    def insert_player_positions_detailed(self, rows: Sequence[tuple[str, int, str]]) -> None:
+        """Insere (ou remplace) des lignes (player_name, match_id, position_detailed).
+
+        Source : `StatsBombClient.get_lineups`. Complement plus fin (24
+        postes StatsBomb) a `player_positions` (4 categories Understat),
+        mais couverture partielle : uniquement les joueurs ayant dispute au
+        moins un match StatsBomb (95 matchs sur 3 saisons), pas les 397
+        matchs du corpus complet.
+        """
+        if not rows:
+            return
+        self.connect().executemany(_INSERT_PLAYER_POSITION_DETAILED_SQL, list(rows))
+        logger.info("insert_player_positions_detailed: %d ligne(s) inseree(s)", len(rows))
 
     def insert_shots(self, shots: Sequence[ShotEvent]) -> None:
         """Insere (ou remplace) une liste de tirs dans la table `shots`.

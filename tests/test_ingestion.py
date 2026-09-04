@@ -28,6 +28,63 @@ MATCHES_FIXTURE: list[dict[str, Any]] = [
     },
 ]
 
+LINEUPS_FIXTURE: list[dict[str, Any]] = [
+    {
+        "team_name": "Paris Saint-Germain",
+        "lineup": [
+            {
+                "player_id": 10,
+                "player_name": "Zlatan Ibrahimovic",
+                "player_nickname": "Zlatan",
+                "jersey_number": 10,
+                "positions": [
+                    {
+                        "position_id": 23,
+                        "position": "Center Forward",
+                        "from": "00:00",
+                        "to": None,
+                        "from_period": 1,
+                        "to_period": None,
+                        "start_reason": "Starting XI",
+                        "end_reason": None,
+                    }
+                ],
+            },
+            {
+                "player_id": 11,
+                "player_name": "Joueur Sans Poste",
+                "player_nickname": None,
+                "jersey_number": 22,
+                "positions": [],
+            },
+        ],
+    },
+    {
+        "team_name": "Nantes",
+        "lineup": [
+            {
+                "player_id": 20,
+                "player_name": "Adversaire",
+                "player_nickname": None,
+                "jersey_number": 5,
+                "positions": [
+                    {
+                        "position_id": 5,
+                        "position": "Left Back",
+                        "from": "00:00",
+                        "to": None,
+                        "from_period": 1,
+                        "to_period": None,
+                        "start_reason": "Starting XI",
+                        "end_reason": None,
+                    }
+                ],
+            },
+        ],
+    },
+]
+
+
 EVENTS_FIXTURE: list[dict[str, Any]] = [
     {
         "id": "evt-1",
@@ -133,6 +190,32 @@ def test_get_shot_events_non_goal_is_flagged_false(client: StatsBombClient) -> N
     assert len(shots) == 1
     assert shots[0].is_goal is False
     assert shots[0].outcome == "Off T"
+
+
+def test_get_lineups_filters_by_team_name(client: StatsBombClient) -> None:
+    with patch.object(client._session, "get", return_value=_mock_response(LINEUPS_FIXTURE)):
+        lineup = client.get_lineups(match_id=1, team_name="Paris Saint-Germain")
+
+    assert len(lineup) == 2
+    assert {p["player_name"] for p in lineup} == {"Zlatan Ibrahimovic", "Joueur Sans Poste"}
+
+
+def test_get_lineups_without_filter_returns_all_teams(client: StatsBombClient) -> None:
+    with patch.object(client._session, "get", return_value=_mock_response(LINEUPS_FIXTURE)):
+        lineup = client.get_lineups(match_id=1)
+
+    assert len(lineup) == 3
+
+
+def test_get_lineups_preserves_position_details(client: StatsBombClient) -> None:
+    with patch.object(client._session, "get", return_value=_mock_response(LINEUPS_FIXTURE)):
+        lineup = client.get_lineups(match_id=1, team_name="Paris Saint-Germain")
+
+    zlatan = next(p for p in lineup if p["player_name"] == "Zlatan Ibrahimovic")
+    assert zlatan["positions"][0]["position"] == "Center Forward"
+
+    no_position = next(p for p in lineup if p["player_name"] == "Joueur Sans Poste")
+    assert no_position["positions"] == []
 
 
 def test_get_json_propagates_http_error(client: StatsBombClient) -> None:

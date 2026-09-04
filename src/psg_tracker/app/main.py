@@ -101,6 +101,18 @@ def _apply_filters(shots: pd.DataFrame) -> pd.DataFrame:
     positions = [p for p in _POSITION_ORDER if p in set(shots["position"].unique())]
     selected_positions = st.sidebar.multiselect("Poste", positions, default=positions)
 
+    detailed_present = set(shots["position_detailed"].unique())
+    detailed_positions = sorted(p for p in detailed_present if p != "Inconnu")
+    if "Inconnu" in detailed_present:
+        detailed_positions.append("Inconnu")
+    selected_detailed_positions = st.sidebar.multiselect(
+        "Poste detaille (StatsBomb)", detailed_positions, default=detailed_positions
+    )
+    st.sidebar.caption(
+        "Granularite ailier/lateral/numero 9 - couverture partielle "
+        "(95 matchs StatsBomb sur 397, saisons 2015/16, 2021/22, 2022/23)."
+    )
+
     goal_filter = st.sidebar.radio("But", _GOAL_FILTER_OPTIONS, index=0)
 
     n_matches = shots[["source", "match_date"]].drop_duplicates().shape[0]
@@ -114,6 +126,7 @@ def _apply_filters(shots: pd.DataFrame) -> pd.DataFrame:
         & shots["competition"].isin(selected_competitions)
         & shots["season"].astype(str).isin(selected_seasons)
         & shots["position"].isin(selected_positions)
+        & shots["position_detailed"].isin(selected_detailed_positions)
     ]
     if goal_filter == "Buts uniquement":
         filtered = filtered[filtered["is_goal"]]
@@ -204,11 +217,17 @@ def _render_player_profile(shots: pd.DataFrame) -> None:
     n_goals = int(player_shots["is_goal"].sum())
     xg_total = float(player_shots["xg_pred"].sum())
     position = str(player_shots["position"].iloc[0])
+    position_detailed = str(player_shots["position_detailed"].iloc[0])
+    position_label = (
+        f"{position} ({position_detailed})" if position_detailed != "Inconnu" else position
+    )
 
     st.markdown(
         theme.player_hero_html(
             name=player,
-            subtitle=f"{position} - {n_matches} match(s) - {n_shots} tir(s) dans la selection",
+            subtitle=(
+                f"{position_label} - {n_matches} match(s) - {n_shots} tir(s) dans la selection"
+            ),
             photo_data_uri=theme.player_photo_data_uri(player),
         ),
         unsafe_allow_html=True,
