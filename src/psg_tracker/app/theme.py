@@ -12,6 +12,12 @@ ils sont donc versionnes (cf. `.gitignore`). A defaut de fichier, le repo
 reste fonctionnel : `psg_badge_svg` (dessin original, cercle + tour Eiffel
 stylisee) sert de repli.
 
+Texture de fond : `psg_texture_data_uri` cherche
+`data/assets/branding/bg-texture.jpg` (motif reseau discret, genere via
+Canva - creation originale, pas de marque protegee) ; habille `.stApp` en
+plus des logo/banniere reels. Optionnel comme le reste : sans fichier, le
+degrade CSS existant suffit.
+
 Portraits joueur : meme logique via `player_photo_data_uri`
 (`data/assets/players/<slug>.{jpg,png}`), mais ce dossier reste non
 versionne par defaut (photos de personnes identifiables, droit a l'image) ;
@@ -42,6 +48,7 @@ _PLAYERS_DIR = _REPO_ROOT / "data/assets/players"
 _BRANDING_DIR = _REPO_ROOT / "data/assets/branding"
 _LOGO_PATH = _BRANDING_DIR / "psg-logo.png"
 _HERO_PATH = _BRANDING_DIR / "psg-hero.png"
+_TEXTURE_PATH = _BRANDING_DIR / "bg-texture.jpg"
 
 _MIME_BY_SUFFIX = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png"}
 
@@ -97,6 +104,14 @@ def psg_hero_data_uri() -> str | None:
     return _local_image_data_uri(_HERO_PATH)
 
 
+def psg_texture_data_uri() -> str | None:
+    """Texture de fond (motif reseau discret, genere via Canva) si deposee sous
+    `data/assets/branding/bg-texture.jpg`. Habille le fond de toute l'app ;
+    reste optionnel comme les autres visuels (le degrade seul suffit en repli).
+    """
+    return _local_image_data_uri(_TEXTURE_PATH)
+
+
 def psg_badge_svg(size: int = 56) -> str:
     """Badge SVG original (cercle + tour Eiffel geometrique) : repli si pas de vrai logo."""
     return f"""
@@ -125,13 +140,17 @@ def _badge_data_uri(size: int = 56) -> str:
 
 def inject_global_css() -> str:
     """Feuille de style globale (fond, cartes KPI, sidebar, onglets, banniere, header)."""
+    texture_uri = psg_texture_data_uri()
+    texture_layer = (
+        f"url('{texture_uri}') center/cover no-repeat fixed,\n        " if texture_uri else ""
+    )
     return f"""
 <style>
 .stApp {{
     background:
         radial-gradient(1200px 600px at 15% -10%, {NAVY_LIGHT} 0%, transparent 60%),
         radial-gradient(1000px 500px at 110% 10%, {NAVY} 0%, transparent 55%),
-        {NAVY_DARK};
+        {texture_layer}{NAVY_DARK};
 }}
 
 [data-testid="stSidebar"] {{
