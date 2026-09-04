@@ -367,7 +367,7 @@ def hero_banner_html(subtitle: str) -> str:
     <div class="psg-hero-banner-content">
         <img class="psg-logo" src="{logo_uri}" alt="Logo PSG"/>
         <div>
-            <h1>PSG Live Sports Tracker</h1>
+            <h1>PSG Sports Tracker</h1>
             <p>{subtitle}</p>
         </div>
     </div>

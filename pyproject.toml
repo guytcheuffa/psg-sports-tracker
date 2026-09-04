@@ -1,7 +1,7 @@
 [project]
 name = "psg-tracker"
 version = "0.1.0"
-description = "Live Sports Tracker & xG Analytics for Paris Saint-Germain"
+description = "Sports Tracker & xG Analytics for Paris Saint-Germain"
 requires-python = ">=3.11"
 readme = "README.md"
 dependencies = [

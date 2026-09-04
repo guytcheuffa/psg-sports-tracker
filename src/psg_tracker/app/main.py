@@ -255,7 +255,7 @@ def _render_shot_explainer(shots: pd.DataFrame, model_path: Path) -> None:
 
 def main() -> None:
     """Lance le dashboard Streamlit."""
-    st.set_page_config(page_title="PSG Live Tracker", layout="wide", page_icon="⚽")
+    st.set_page_config(page_title="PSG Sports Tracker", layout="wide", page_icon="⚽")
     st.markdown(theme.inject_global_css(), unsafe_allow_html=True)
 
     if not _check_prerequisites():
@@ -264,7 +264,7 @@ def main() -> None:
 
     shots = load_shots_with_xg(str(_DB_PATH), str(_MODEL_PATH))
     st.markdown(
-        theme.hero_banner_html(f"{len(shots)} tirs en base - analytics xG en temps quasi reel"),
+        theme.hero_banner_html(f"{len(shots)} tirs en base - analytics xG multi-saisons"),
         unsafe_allow_html=True,
     )
 

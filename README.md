@@ -1,4 +1,4 @@
-# PSG Live Sports Tracker
+# PSG Sports Tracker
 
 Pipeline data engineering & data science autour des donnees evenementielles
 du Paris Saint-Germain : ingestion, stockage analytique, modele de
