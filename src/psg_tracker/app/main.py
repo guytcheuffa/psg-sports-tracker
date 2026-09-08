@@ -142,13 +142,21 @@ def _apply_filters(shots: pd.DataFrame) -> pd.DataFrame:
         default=detailed_positions,
         format_func=_detailed_position_label,
     )
-    st.sidebar.warning(
-        "Granularite ailier/lateral/numero 9 : donnees StatsBomb limitees a "
-        "3 saisons sur 12 (2015/16, 2021/22, 2022/23) - plafond du dataset "
-        "ouvert (aucune autre saison Ligue 1 ou match PSG en Champions "
-        "League n'y est publie), pas une limite d'ingestion. ⚠️ = poste "
-        "domine a plus de 60% par un seul joueur sur ces 3 saisons : a lire "
-        "comme un profil individuel, pas une tendance generale."
+    st.sidebar.markdown(
+        theme.sidebar_note_html(
+            icon="📊",
+            title="Poste detaille : couverture partielle",
+            body=(
+                "Donnees StatsBomb limitees a 3 saisons sur 12 (2015/16, "
+                "2021/22, 2022/23) — plafond du dataset ouvert (aucune autre "
+                "saison Ligue 1 ni match PSG en Champions League n'y est "
+                "publie), pas une limite d'ingestion. <strong>⚠️</strong> sur "
+                "une option = poste domine a plus de 60% par un seul joueur "
+                "sur ces 3 saisons : a lire comme un profil individuel, pas "
+                "une tendance generale."
+            ),
+        ),
+        unsafe_allow_html=True,
     )
 
     goal_filter = st.sidebar.radio("But", _GOAL_FILTER_OPTIONS, index=0)
@@ -178,15 +186,20 @@ def _render_kpis(shots: pd.DataFrame) -> None:
     total_shots = len(shots)
     total_goals = int(shots["is_goal"].sum())
     total_xg = float(shots["xg_pred"].sum())
+    delta = total_goals - total_xg
 
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Tirs", total_shots)
-    col2.metric("Buts reels", total_goals)
-    col3.metric("xG cumule", f"{total_xg:.1f}")
+    col1.metric("🎯 Tirs", f"{total_shots:,}".replace(",", " "))
+    col2.metric("⚽ Buts reels", total_goals)
+    col3.metric("📈 xG cumule", f"{total_xg:.1f}")
     col4.metric(
-        "Buts - xG",
-        f"{total_goals - total_xg:+.1f}",
-        help="Positif = plus efficace que les positions de tir ne le suggerent.",
+        "Efficacite (buts vs xG)",
+        f"{total_goals} buts",
+        delta=f"{delta:+.1f} xG",
+        help=(
+            "Delta positif = la selection marque plus que ce que la qualite "
+            "des tirs (xG) ne le suggere - finition au-dessus de la moyenne."
+        ),
     )
 
 
@@ -454,7 +467,10 @@ def main() -> None:
 
     shots = load_shots_with_xg(str(_DB_PATH), str(_MODEL_PATH))
     st.markdown(
-        theme.hero_banner_html(f"{len(shots)} tirs en base - analytics xG multi-saisons"),
+        theme.hero_banner_html(
+            f"{len(shots)} tirs en base - analytics xG multi-saisons",
+            tech_stack=["Python", "DuckDB", "XGBoost", "SHAP", "Streamlit", "Plotly"],
+        ),
         unsafe_allow_html=True,
     )
 
@@ -480,6 +496,8 @@ def main() -> None:
     with tab_shap:
         st.subheader("Explicabilite d'un tir")
         _render_shot_explainer(filtered, _MODEL_PATH)
+
+    st.markdown(theme.app_footer_html(), unsafe_allow_html=True)
 
 
 if __name__ == "__main__":

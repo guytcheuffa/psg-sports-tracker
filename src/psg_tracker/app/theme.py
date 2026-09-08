@@ -345,12 +345,101 @@ button[data-baseweb="tab"][aria-selected="true"] {{ color: {TEXT} !important; }}
     line-height: 1.5;
     margin: 3px 0;
 }}
+
+/* Encart methodologique sidebar (remplace st.sidebar.warning "brut") */
+.sidebar-note {{
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    background: rgba(217, 164, 65, 0.08);
+    border: 1px solid rgba(217, 164, 65, 0.30);
+    border-left: 3px solid {GOLD};
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin: 2px 0 18px 0;
+}}
+.sidebar-note-icon {{
+    font-size: 1rem;
+    line-height: 1.3;
+    flex-shrink: 0;
+}}
+.sidebar-note-body {{
+    font-size: 0.71rem;
+    line-height: 1.5;
+    color: {TEXT_MUTED};
+}}
+.sidebar-note-body strong {{
+    display: block;
+    color: {TEXT};
+    font-size: 0.74rem;
+    margin-bottom: 2px;
+}}
+
+/* Badges "stack technique" sous le sous-titre de la banniere d'en-tete */
+.psg-hero-banner-badges {{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+}}
+.psg-hero-banner-badge {{
+    background: rgba(217, 164, 65, 0.12);
+    border: 1px solid rgba(217, 164, 65, 0.40);
+    color: {GOLD};
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    text-transform: uppercase;
+}}
+
+/* Pied de page global (bas de l'app, sous les onglets) */
+.app-footer {{
+    margin-top: 36px;
+    padding-top: 20px;
+    border-top: 1px solid {NAVY_LIGHT};
+    text-align: center;
+}}
+.app-footer-badges {{
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}}
+.app-footer-badge {{
+    background: {NAVY};
+    border: 1px solid {NAVY_LIGHT};
+    color: {TEXT_MUTED};
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 999px;
+    letter-spacing: 0.3px;
+}}
+.app-footer p {{
+    font-size: 0.74rem;
+    color: {TEXT_MUTED};
+    line-height: 1.6;
+    max-width: 760px;
+    margin: 4px auto;
+}}
+.app-footer a {{
+    color: {GOLD};
+    text-decoration: none;
+}}
 </style>
 """.strip()
 
 
-def hero_banner_html(subtitle: str) -> str:
-    """Banniere d'en-tete : logo (reel si dispo, sinon badge dessine) + titre + photo de fond."""
+def hero_banner_html(subtitle: str, tech_stack: list[str] | None = None) -> str:
+    """Banniere d'en-tete : logo (reel si dispo, sinon badge dessine) + titre + photo de fond.
+
+    `tech_stack` (optionnel) affiche une ligne de badges sous le sous-titre
+    (ex. ["Python", "DuckDB", "XGBoost"]) : signal rapide de la stack
+    technique reelle du projet, visible sans avoir a ouvrir le README.
+    """
     logo_uri = psg_logo_data_uri() or _badge_data_uri(68)
     hero_uri = psg_hero_data_uri()
 
@@ -359,6 +448,11 @@ def hero_banner_html(subtitle: str) -> str:
         if hero_uri
         else ""
     )
+
+    badges_html = ""
+    if tech_stack:
+        badges = "".join(f'<span class="psg-hero-banner-badge">{b}</span>' for b in tech_stack)
+        badges_html = f'<div class="psg-hero-banner-badges">{badges}</div>'
 
     return f"""
 <div class="psg-hero-banner">
@@ -369,6 +463,7 @@ def hero_banner_html(subtitle: str) -> str:
         <div>
             <h1>PSG Sports Tracker</h1>
             <p>{subtitle}</p>
+            {badges_html}
         </div>
     </div>
 </div>
@@ -393,6 +488,43 @@ def sidebar_badges_html(labels: list[str]) -> str:
     """Ligne de badges pour la sidebar (ex. sources de donnees actives)."""
     badges = "".join(f'<span class="sidebar-badge">{label}</span>' for label in labels)
     return f'<div class="sidebar-badge-row">{badges}</div>'
+
+
+def sidebar_note_html(title: str, body: str, icon: str = "ℹ️") -> str:
+    """Encart methodologique discret pour la sidebar (limite de donnees, avertissement, etc).
+
+    Remplace `st.sidebar.warning(...)` : le composant Streamlit natif est
+    un bandeau jaune vif qui detonne avec la charte navy/or du dashboard.
+    Ici, meme fonction (attirer l'oeil sur une limite/caveat) mais integree
+    visuellement : liseret or, fond tres attenue, typographie coherente
+    avec le reste de la sidebar.
+    """
+    return f"""
+<div class="sidebar-note">
+    <div class="sidebar-note-icon">{icon}</div>
+    <div class="sidebar-note-body"><strong>{title}</strong>{body}</div>
+</div>
+""".strip()
+
+
+def app_footer_html() -> str:
+    """Pied de page global : stack technique + pipeline + disclaimer (bas de toutes les pages)."""
+    tech = ["Python", "DuckDB", "XGBoost", "SHAP", "Streamlit", "Plotly", "pytest", "Docker"]
+    badges = "".join(f'<span class="app-footer-badge">{t}</span>' for t in tech)
+    return f"""
+<div class="app-footer">
+    <div class="app-footer-badges">{badges}</div>
+    <p>
+        Pipeline hybride StatsBomb Open Data (historique) + Understat (scraping public)
+        &rarr; DuckDB &rarr; modele xG XGBoost avec explicabilite SHAP &rarr; dashboard
+        Streamlit / Plotly.
+    </p>
+    <p>
+        Projet personnel / portfolio, sans affiliation avec le Paris Saint-Germain.
+        Code source, tests et methodologie detailles dans le README du depot.
+    </p>
+</div>
+""".strip()
 
 
 def sidebar_footer_html(n_shots: int, n_matches: int, seasons: str) -> str:
