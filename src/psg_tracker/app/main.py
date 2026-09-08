@@ -286,6 +286,83 @@ def _render_player_profile(shots: pd.DataFrame) -> None:
     _render_shotmap(player_shots, height=420)
 
 
+_MIN_SHOTS_FOR_HEATMAP = 5
+
+
+def _render_shot_context_heatmap(shots: pd.DataFrame, selected_index: int) -> None:
+    """Heatmap de densite des tirs de la selection filtree + position du tir explique.
+
+    Contextualise le diagramme SHAP : la carte SHAP explique *pourquoi* le
+    modele estime tel xG pour ce tir precis, cette heatmap montre *ou* ce
+    tir se situe par rapport aux zones ou l'equipe/le joueur filtre tire le
+    plus souvent (ex. verifier si un tir bien note est aussi pris depuis
+    une zone "chaude" habituelle, ou au contraire atypique).
+    """
+    selected = shots.loc[selected_index]
+
+    if len(shots) < _MIN_SHOTS_FOR_HEATMAP:
+        fig = half_pitch_figure()
+        fig.add_trace(
+            go.Scatter(
+                x=[selected["loc_x"]],
+                y=[selected["loc_y"]],
+                mode="markers",
+                marker={"size": 22, "color": theme.RED, "symbol": "star"},
+                hoverinfo="skip",
+                showlegend=False,
+            )
+        )
+        _themed_figure(fig, height=360, showlegend=False, margin={"t": 10, "b": 0})
+        st.plotly_chart(fig, width="stretch")
+        st.caption(
+            f"Trop peu de tirs dans la selection actuelle ({len(shots)}) pour une carte "
+            "de densite significative : seule la position du tir explique est affichee."
+        )
+        return
+
+    fig = half_pitch_figure()
+
+    fig.add_trace(
+        go.Histogram2d(
+            x=shots["loc_x"],
+            y=shots["loc_y"],
+            xbins={"start": 60.0, "end": 122.0, "size": 5.0},
+            ybins={"start": -2.0, "end": 82.0, "size": 5.0},
+            colorscale=[[0.0, "rgba(20,31,77,0)"], [1.0, theme.GOLD]],
+            showscale=False,
+            opacity=0.65,
+            hoverinfo="skip",
+        )
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=[selected["loc_x"]],
+            y=[selected["loc_y"]],
+            mode="markers",
+            name="Tir explique",
+            marker={
+                "size": 22,
+                "color": theme.RED,
+                "symbol": "star",
+                "line": {"color": theme.TEXT, "width": 2},
+            },
+            hovertemplate=(
+                f"<b>{selected['player_name']}</b><br>"
+                f"Minute {selected['minute']} - {selected['shot_type']}<br>"
+                f"xG: {selected['xg_pred']:.2f}<extra></extra>"
+            ),
+        )
+    )
+
+    _themed_figure(fig, height=380, showlegend=False, margin={"t": 10, "b": 0})
+    st.plotly_chart(fig, width="stretch")
+    st.caption(
+        "Densite des tirs de la selection filtree en fond (zones les plus chaudes = "
+        "plus de tirs), etoile rouge = position exacte du tir explique ci-dessus."
+    )
+
+
 def _render_shot_explainer(shots: pd.DataFrame, model_path: Path) -> None:
     """Explicabilite SHAP d'un tir individuel choisi dans la liste filtree."""
     if shots.empty:
@@ -337,6 +414,9 @@ def _render_shot_explainer(shots: pd.DataFrame, model_path: Path) -> None:
         "Valeurs en espace log-odds (sortie brute de l'arbre) : positif pousse vers "
         "'plus susceptible d'etre un but', negatif vers l'inverse."
     )
+
+    st.markdown("##### Localisation du tir")
+    _render_shot_context_heatmap(shots, choice)
 
 
 def main() -> None:
