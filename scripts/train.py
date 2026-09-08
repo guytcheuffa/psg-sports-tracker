@@ -32,7 +32,10 @@ from sklearn.metrics import brier_score_loss, log_loss, roc_auc_score
 from sklearn.model_selection import train_test_split
 
 from psg_tracker.config import settings
-from psg_tracker.features.engineering import build_feature_matrix
+from psg_tracker.features.engineering import (
+    build_feature_matrix,
+    compute_preferred_foot_map,
+)
 from psg_tracker.models.xg_model import XGModel
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -88,22 +91,38 @@ def main() -> None:
     if raw_shots.empty:
         raise SystemExit(f"Aucun tir trouve dans {args.db_path} (lancer scripts/ingest.py d'abord)")
 
-    features = build_feature_matrix(raw_shots)
-    target = features["is_goal"].astype(int)
-
-    train_df, test_df, y_train, y_test = train_test_split(
-        features,
-        target,
+    # Split sur les tirs BRUTS (avant feature engineering), pas sur la
+    # matrice de features deja construite : necessaire pour que le mapping
+    # "pied dominant" (is_strong_foot) soit fit sur le train uniquement, puis
+    # seulement applique (transform) au test - sinon les tirs de test
+    # contribuent eux-memes a definir le pied dominant utilise pour les
+    # evaluer, ce qui biaise legerement (et artificiellement) le ROC-AUC
+    # rapporte a la hausse. Cf. `compute_preferred_foot_map` /
+    # `apply_preferred_foot_feature` dans `features/engineering.py`.
+    raw_target = raw_shots["is_goal"].astype(int)
+    train_raw, test_raw = train_test_split(
+        raw_shots,
         test_size=args.test_size,
         random_state=args.random_state,
-        stratify=target,
+        stratify=raw_target,
     )
+
+    foot_map = compute_preferred_foot_map(train_raw)
+    train_df = build_feature_matrix(train_raw, foot_map=foot_map)
+    test_df = build_feature_matrix(test_raw, foot_map=foot_map)
+    y_train = train_df["is_goal"].astype(int)
+    y_test = test_df["is_goal"].astype(int)
 
     eval_model = XGModel()
     eval_model.train(train_df, y_train)
     metrics = evaluate(eval_model, test_df, y_test)
     logger.info("Evaluation (hold-out %.0f%%): %s", args.test_size * 100, metrics)
 
+    # Modele final : reentraine sur 100% des donnees (usage standard en
+    # production, cf. docstring du module) - ici pas de fuite a proteger,
+    # le mapping "pied dominant" peut etre fit=transform sur l'ensemble.
+    features = build_feature_matrix(raw_shots)
+    target = features["is_goal"].astype(int)
     final_model = XGModel()
     final_model.train(features, target)
     final_model.save(args.output)

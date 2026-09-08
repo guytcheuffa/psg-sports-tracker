@@ -54,10 +54,13 @@ probabilite de but (xG), et dashboard interactif.
   - `scripts/train.py` : entraine le modele xG sur l'integralite des tirs reels en base (les deux
     sources, deja deduplique a l'ingestion). Split train/test (80/20 stratifie) pour une
     evaluation honnete, puis reentrainement final sur 100% des donnees pour le modele sauvegarde.
-    Resultat actuel (6283 tirs reels : 1432 StatsBomb + 4851 Understat) : **ROC-AUC 0.775, log
-    loss 0.353** sur le jeu de test (1257 tirs) - en nette hausse par rapport a la version limitee
+    Resultat actuel (6283 tirs reels : 1432 StatsBomb + 4851 Understat) : **ROC-AUC 0.772, log
+    loss 0.355** sur le jeu de test (1257 tirs) - en nette hausse par rapport a la version limitee
     a 4 saisons partielles (ROC-AUC 0.695), grace au volume et a la diversite de situations de tir
-    supplementaires.
+    supplementaires. Le split train/test se fait sur les tirs bruts *avant* le feature
+    engineering : la feature `is_strong_foot` (pied dominant du joueur) est fit sur le train
+    uniquement puis appliquee au test, pour eviter une fuite d'information (sinon les tirs de
+    test contribuent eux-memes a definir le pied dominant utilise pour les evaluer).
 - **Stockage** : DuckDB, transformations SQL typees (cle composite `source + match_id`)
 - **ML** : XGBoost (classification binaire xG), SHAP (explicabilite)
 - **Visualisation** : Streamlit + Plotly — shotmap (demi-terrain, taille = xG, couleur = but/non-but),
@@ -125,7 +128,7 @@ Projet en developpement actif (vitrine technique Data Science / Data Engineering
       AJAX internes, dedup inter-sources +/-1 jour, cf. section Understat ci-dessus) - 302 matchs
       / 4851 tirs / 721 buts
 - [x] Entrainement reel du modele xG sur les 6283 tirs combines (`scripts/train.py`),
-      ROC-AUC 0.775 sur le jeu de test
+      ROC-AUC 0.772 sur le jeu de test (split sans fuite train/test)
 - [x] Jour 3 : dashboard Streamlit (shotmap, classement xG, explicabilite SHAP), teste via AppTest
 - [x] CI/CD : GitHub Actions (ruff + mypy strict + pytest/coverage sur `src`+`scripts`+`tests`)
 - [ ] Docker : configuration ecrite et relue, mais pas buildee dans cet environnement (pas de

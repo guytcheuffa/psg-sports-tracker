@@ -13,7 +13,9 @@ from psg_tracker.features.engineering import (
     add_is_header,
     add_preferred_foot_feature,
     add_shot_angle,
+    apply_preferred_foot_feature,
     build_feature_matrix,
+    compute_preferred_foot_map,
 )
 
 
@@ -110,6 +112,70 @@ def test_add_preferred_foot_feature_flags_majority_foot() -> None:
     # joueur 1 : pied fort = Right Foot (2/3 tirs) -> [True, True, False]
     # joueur 2 : un seul tir, forcement "pied dominant" -> True
     assert result["is_strong_foot"].tolist() == [True, True, False, True]
+
+
+def test_compute_preferred_foot_map_returns_majority_foot_per_player() -> None:
+    df = pd.DataFrame(
+        {
+            "player_id": [1, 1, 1, 2],
+            "body_part": ["Right Foot", "Right Foot", "Left Foot", "Left Foot"],
+        }
+    )
+
+    foot_map = compute_preferred_foot_map(df)
+
+    assert foot_map == {1: "Right Foot", 2: "Left Foot"}
+
+
+def test_apply_preferred_foot_feature_uses_given_map_not_own_data() -> None:
+    # Le mapping vient d'un train set distinct : le joueur 1 y est gaucher,
+    # meme si dans CE DataFrame (le "test set") il ne tire que du pied droit.
+    foot_map = {1: "Left Foot"}
+    df = pd.DataFrame(
+        {
+            "player_id": [1, 1],
+            "body_part": ["Right Foot", "Left Foot"],
+        }
+    )
+
+    result = apply_preferred_foot_feature(df, foot_map)
+
+    assert result["is_strong_foot"].tolist() == [False, True]
+
+
+def test_apply_preferred_foot_feature_defaults_to_false_for_unmapped_player() -> None:
+    # Joueur absent du mapping (ex. n'apparait que dans le test set) : pas
+    # d'erreur, is_strong_foot=False par defaut plutot qu'un NaN qui casserait
+    # le modele en aval.
+    df = pd.DataFrame({"player_id": [99], "body_part": ["Right Foot"]})
+
+    result = apply_preferred_foot_feature(df, foot_map={})
+
+    assert result["is_strong_foot"].tolist() == [False]
+
+
+def test_build_feature_matrix_with_foot_map_does_not_use_own_data_for_leakage() -> None:
+    # Le "test set" ci-dessous ne contient qu'un tir du pied gauche pour le
+    # joueur 1 ; s'il fittait son propre mapping (comme add_preferred_foot_feature
+    # seule le ferait), ce tir serait etiquete "pied fort". Avec un mapping
+    # externe (fit sur un train ou ce joueur est droitier), il doit rester
+    # etiquete "pied faible" : c'est exactement le scenario de fuite train/test
+    # que ce paramametre `foot_map` est cense empecher (cf. scripts/train.py).
+    foot_map = {1: "Right Foot"}
+    df = pd.DataFrame(
+        {
+            "player_id": [1],
+            "loc_x": [110.0],
+            "loc_y": [40.0],
+            "body_part": ["Left Foot"],
+            "shot_type": ["Open Play"],
+            "is_goal": [False],
+        }
+    )
+
+    result = build_feature_matrix(df, foot_map=foot_map)
+
+    assert result["is_strong_foot"].tolist() == [False]
 
 
 def test_build_feature_matrix_returns_all_expected_columns() -> None:
