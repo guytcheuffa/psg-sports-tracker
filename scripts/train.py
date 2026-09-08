@@ -36,6 +36,7 @@ from psg_tracker.features.engineering import (
     build_feature_matrix,
     compute_preferred_foot_map,
 )
+from psg_tracker.models.eval_report import save_eval_report
 from psg_tracker.models.xg_model import XGModel
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -67,16 +68,24 @@ def load_shots(db_path: Path) -> pd.DataFrame:
     return df
 
 
-def evaluate(model: XGModel, features: pd.DataFrame, target: pd.Series) -> dict[str, float]:
-    """Calcule les metriques standard d'un modele xG sur un jeu de test."""
+def evaluate(
+    model: XGModel, features: pd.DataFrame, target: pd.Series
+) -> tuple[dict[str, float], pd.Series]:
+    """Calcule les metriques standard d'un modele xG sur un jeu de test.
+
+    Renvoie aussi les predictions brutes (alignees sur `target`) : servent a
+    `save_eval_report` pour que le dashboard puisse tracer une courbe ROC et
+    une courbe de calibration a partir de vraies predictions hold-out.
+    """
     predictions = model.predict_proba(features)
-    return {
+    metrics = {
         "roc_auc": float(roc_auc_score(target, predictions)),
         "log_loss": float(log_loss(target, predictions)),
         "brier_score": float(brier_score_loss(target, predictions)),
         "n_test": int(len(target)),
         "goal_rate": float(target.mean()),
     }
+    return metrics, predictions
 
 
 def main() -> None:
@@ -115,8 +124,18 @@ def main() -> None:
 
     eval_model = XGModel()
     eval_model.train(train_df, y_train)
-    metrics = evaluate(eval_model, test_df, y_test)
+    metrics, test_predictions = evaluate(eval_model, test_df, y_test)
     logger.info("Evaluation (hold-out %.0f%%): %s", args.test_size * 100, metrics)
+
+    eval_report_path = save_eval_report(
+        args.output,
+        metrics,
+        y_true=y_test,
+        y_pred=test_predictions,
+        test_size=args.test_size,
+        random_state=args.random_state,
+    )
+    logger.info("Rapport d'evaluation sauvegarde: %s", eval_report_path)
 
     # Modele final : reentraine sur 100% des donnees (usage standard en
     # production, cf. docstring du module) - ici pas de fuite a proteger,

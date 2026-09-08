@@ -14,6 +14,7 @@ import shap
 import streamlit as st
 
 from psg_tracker.features.engineering import build_feature_matrix
+from psg_tracker.models.eval_report import EvalReport, load_eval_report
 from psg_tracker.models.xg_model import XGModel
 
 _SHOTS_QUERY = """
@@ -252,6 +253,17 @@ def load_model(model_path: str) -> XGModel:
     model = XGModel()
     model.load(Path(model_path))
     return model
+
+
+@st.cache_data(show_spinner="Chargement du rapport d'evaluation...")
+def load_eval_report_cached(model_path: str) -> EvalReport | None:
+    """Charge (et met en cache) le rapport d'evaluation hold-out du modele, si disponible.
+
+    None si `scripts/train.py` n'a pas encore ete relance depuis l'ajout de
+    cette fonctionnalite (pas d'erreur : l'onglet diagnostic du dashboard
+    gere ce cas en affichant un message plutot qu'en plantant).
+    """
+    return load_eval_report(Path(model_path))
 
 
 @st.cache_resource(show_spinner="Preparation de l'explicabilite SHAP...")

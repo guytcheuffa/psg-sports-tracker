@@ -1,20 +1,30 @@
 """Point d'entree de l'application Streamlit : dashboard xG du PSG.
 
-Quatre onglets : vue d'ensemble (KPIs + shotmap), classement buts reels vs
+Cinq onglets : vue d'ensemble (KPIs + shotmap), classement buts reels vs
 xG cumule par joueur, profil d'un joueur (carte avec photo/monogramme en
-filigrane), et explicabilite SHAP d'un tir individuel selectionne.
+filigrane), explicabilite SHAP d'un tir individuel selectionne, et
+diagnostic du modele (courbe ROC + courbe de calibration sur le jeu de
+test hold-out reel, cf. `models/eval_report.py`).
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from sklearn.calibration import calibration_curve
+from sklearn.metrics import roc_curve
 
 from psg_tracker.app import theme
-from psg_tracker.app.data_loader import get_shap_explainer, load_model, load_shots_with_xg
+from psg_tracker.app.data_loader import (
+    get_shap_explainer,
+    load_eval_report_cached,
+    load_model,
+    load_shots_with_xg,
+)
 from psg_tracker.app.pitch import half_pitch_figure
 from psg_tracker.config import settings
 
@@ -456,6 +466,126 @@ def _render_shot_explainer(shots: pd.DataFrame, model_path: Path) -> None:
     _render_shot_context_heatmap(shots, choice)
 
 
+def _render_model_diagnostics(model_path: Path) -> None:
+    """Diagnostic du modele : metriques + courbe ROC + courbe de calibration.
+
+    Utilise les VRAIES predictions hold-out sauvegardees par `scripts/train.py`
+    (cf. `models/eval_report.py`), pas un recalcul a la volee avec le modele
+    final deploye (celui-ci est reentraine sur 100% des donnees - l'evaluer
+    sur les memes tirs donnerait un diagnostic circulaire, artificiellement
+    optimiste).
+    """
+    report = load_eval_report_cached(str(model_path))
+    if report is None:
+        st.info(
+            "Aucun rapport d'evaluation trouve a cote du modele. Relancer "
+            "`python scripts/train.py` pour en generer un (genere automatiquement "
+            "depuis cette version du script)."
+        )
+        return
+
+    metrics = report["metrics"]
+    y_true = np.array(report["y_true"])
+    y_pred = np.array(report["y_pred"])
+    trained_at = report["trained_at"][:10]
+
+    st.caption(
+        f"Evaluation hold-out reelle : {metrics['n_test']} tirs jamais vus par ce modele "
+        f"intermediaire (split {1 - report['test_size']:.0%} entrainement / "
+        f"{report['test_size']:.0%} test stratifie, random_state={report['random_state']}), "
+        f"entraine le {trained_at}."
+    )
+
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("ROC-AUC", f"{metrics['roc_auc']:.3f}", help="1.0 = parfait, 0.5 = aleatoire.")
+    col2.metric("Log loss", f"{metrics['log_loss']:.3f}", help="Plus bas = meilleur.")
+    col3.metric(
+        "Brier score",
+        f"{metrics['brier_score']:.3f}",
+        help="Plus bas = meilleur (discrimination + calibration combinees).",
+    )
+    col4.metric(
+        "Taux de but reel",
+        f"{metrics['goal_rate']:.1%}",
+        help="Part de tirs termines au but dans le jeu de test (baseline naive).",
+    )
+
+    col_roc, col_calib = st.columns(2)
+
+    with col_roc:
+        st.markdown("##### Courbe ROC")
+        fpr, tpr, _ = roc_curve(y_true, y_pred)
+        fig = go.Figure()
+        fig.add_trace(
+            go.Scatter(
+                x=fpr,
+                y=tpr,
+                mode="lines",
+                name="Modele",
+                line={"color": theme.GOLD, "width": 3},
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=[0, 1],
+                y=[0, 1],
+                mode="lines",
+                name="Aleatoire",
+                line={"color": theme.TEXT_MUTED, "width": 1, "dash": "dash"},
+            )
+        )
+        _themed_figure(
+            fig,
+            height=340,
+            xaxis_title="Taux de faux positifs",
+            yaxis_title="Taux de vrais positifs",
+            legend={"orientation": "h", "y": -0.22},
+            margin={"l": 10, "r": 10, "t": 10, "b": 10},
+        )
+        st.plotly_chart(fig, width="stretch")
+
+    with col_calib:
+        st.markdown("##### Courbe de calibration")
+        prob_true, prob_pred = calibration_curve(y_true, y_pred, n_bins=10, strategy="quantile")
+        fig = go.Figure()
+        fig.add_trace(
+            go.Scatter(
+                x=prob_pred,
+                y=prob_true,
+                mode="lines+markers",
+                name="Modele",
+                line={"color": theme.GOLD, "width": 3},
+                marker={"size": 7},
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=[0, 1],
+                y=[0, 1],
+                mode="lines",
+                name="Calibration parfaite",
+                line={"color": theme.TEXT_MUTED, "width": 1, "dash": "dash"},
+            )
+        )
+        _themed_figure(
+            fig,
+            height=340,
+            xaxis_title="xG predit (moyenne du groupe)",
+            yaxis_title="Taux de but reel (groupe)",
+            legend={"orientation": "h", "y": -0.22},
+            margin={"l": 10, "r": 10, "t": 10, "b": 10},
+        )
+        st.plotly_chart(fig, width="stretch")
+
+    st.caption(
+        "Courbe ROC : capacite du modele a distinguer tirs marques / non marques, quel que "
+        "soit le seuil choisi (aire sous la courbe = ROC-AUC). Courbe de calibration : les "
+        "tirs sont regroupes en 10 groupes de taille egale par xG predit croissant - le "
+        "modele est bien calibre si, dans chaque groupe, le taux de but reellement observe "
+        "correspond au xG moyen predit (proche de la diagonale)."
+    )
+
+
 def main() -> None:
     """Lance le dashboard Streamlit."""
     st.set_page_config(page_title="PSG Sports Tracker", layout="wide", page_icon="⚽")
@@ -477,8 +607,14 @@ def main() -> None:
     filtered = _apply_filters(shots)
     _render_kpis(filtered)
 
-    tab_overview, tab_leaderboard, tab_player, tab_shap = st.tabs(
-        ["Vue d'ensemble", "Classement", "Profil joueur", "Explicabilite (SHAP)"]
+    tab_overview, tab_leaderboard, tab_player, tab_shap, tab_diagnostics = st.tabs(
+        [
+            "Vue d'ensemble",
+            "Classement",
+            "Profil joueur",
+            "Explicabilite (SHAP)",
+            "Diagnostic du modele",
+        ]
     )
 
     with tab_overview:
@@ -496,6 +632,10 @@ def main() -> None:
     with tab_shap:
         st.subheader("Explicabilite d'un tir")
         _render_shot_explainer(filtered, _MODEL_PATH)
+
+    with tab_diagnostics:
+        st.subheader("Diagnostic du modele")
+        _render_model_diagnostics(_MODEL_PATH)
 
     st.markdown(theme.app_footer_html(), unsafe_allow_html=True)
 
