@@ -299,6 +299,23 @@ def _render_shot_context_heatmap(shots: pd.DataFrame, selected_index: int) -> No
     une zone "chaude" habituelle, ou au contraire atypique).
     """
     selected = shots.loc[selected_index]
+    is_goal = bool(selected["is_goal"])
+    outcome_label = "⚽ BUT" if is_goal else "❌ Pas de but"
+    outcome_annotation = {
+        "x": selected["loc_x"],
+        "y": selected["loc_y"],
+        "text": f"<b>{outcome_label}</b>",
+        "showarrow": True,
+        "arrowhead": 2,
+        "arrowcolor": theme.TEXT,
+        "ax": 0,
+        "ay": -35,
+        "font": {"color": theme.GOLD if is_goal else theme.TEXT, "size": 13},
+        "bgcolor": theme.NAVY_DARK,
+        "bordercolor": theme.GOLD if is_goal else theme.TEXT_MUTED,
+        "borderwidth": 1,
+        "borderpad": 4,
+    }
 
     if len(shots) < _MIN_SHOTS_FOR_HEATMAP:
         fig = half_pitch_figure()
@@ -312,11 +329,13 @@ def _render_shot_context_heatmap(shots: pd.DataFrame, selected_index: int) -> No
                 showlegend=False,
             )
         )
+        fig.add_annotation(outcome_annotation)
         _themed_figure(fig, height=360, showlegend=False, margin={"t": 10, "b": 0})
         st.plotly_chart(fig, width="stretch")
         st.caption(
             f"Trop peu de tirs dans la selection actuelle ({len(shots)}) pour une carte "
-            "de densite significative : seule la position du tir explique est affichee."
+            "de densite significative : seule la position du tir explique est affichee "
+            "(resultat reel indique au-dessus du marqueur)."
         )
         return
 
@@ -350,16 +369,18 @@ def _render_shot_context_heatmap(shots: pd.DataFrame, selected_index: int) -> No
             hovertemplate=(
                 f"<b>{selected['player_name']}</b><br>"
                 f"Minute {selected['minute']} - {selected['shot_type']}<br>"
-                f"xG: {selected['xg_pred']:.2f}<extra></extra>"
+                f"xG: {selected['xg_pred']:.2f} - {outcome_label}<extra></extra>"
             ),
         )
     )
+    fig.add_annotation(outcome_annotation)
 
     _themed_figure(fig, height=380, showlegend=False, margin={"t": 10, "b": 0})
     st.plotly_chart(fig, width="stretch")
     st.caption(
         "Densite des tirs de la selection filtree en fond (zones les plus chaudes = "
-        "plus de tirs), etoile rouge = position exacte du tir explique ci-dessus."
+        "plus de tirs), etoile rouge = position exacte du tir explique, avec son "
+        "resultat reel (but ou non) indique au-dessus."
     )
 
 
@@ -390,8 +411,11 @@ def _render_shot_explainer(shots: pd.DataFrame, model_path: Path) -> None:
     contributions = pd.Series(shap_values[0], index=model.feature_columns)
     contributions = contributions.reindex(contributions.abs().sort_values(ascending=False).index)
     predicted_xg = float(shots.loc[choice, "xg_pred"])
+    is_goal = bool(shots.loc[choice, "is_goal"])
 
-    st.metric("xG predit pour ce tir", f"{predicted_xg:.2f}")
+    col_xg, col_outcome = st.columns(2)
+    col_xg.metric("xG predit pour ce tir", f"{predicted_xg:.2f}")
+    col_outcome.metric("Resultat reel", "⚽ But" if is_goal else "❌ Pas de but")
 
     fig = go.Figure(
         go.Bar(
