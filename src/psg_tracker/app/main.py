@@ -68,6 +68,27 @@ _POSITION_ORDER = ["Gardien", "Défenseur", "Milieu", "Attaquant", "Inconnu"]
 _GOAL_FILTER_OPTIONS = ["Tous les tirs", "Buts uniquement", "Sans but uniquement"]
 
 
+_DETAILED_POSITION_DOMINANCE_THRESHOLD = 0.6
+
+
+def _detailed_position_dominance(shots: pd.DataFrame) -> dict[str, tuple[str, float]]:
+    """Pour chaque poste detaille (hors "Inconnu"), le joueur le plus present et sa part.
+
+    La couverture StatsBomb est limitee a 3 saisons sur 12 (plafond du
+    dataset ouvert, pas une limite d'ingestion - cf. README) : sur cette
+    fenetre reduite, certains postes fins ne refletent en realite qu'un
+    seul joueur (ex. "Ailier droit" ~= Angel Di Maria a 94%). Sert a
+    avertir dans la sidebar plutot qu'a laisser croire a une tendance de
+    poste generalisable.
+    """
+    dominance: dict[str, tuple[str, float]] = {}
+    known = shots[shots["position_detailed"] != "Inconnu"]
+    for position, group in known.groupby("position_detailed"):
+        counts = group["player_name"].value_counts()
+        dominance[str(position)] = (str(counts.index[0]), float(counts.iloc[0] / counts.sum()))
+    return dominance
+
+
 def _apply_filters(shots: pd.DataFrame) -> pd.DataFrame:
     """Sidebar complete : identite visuelle, filtres, infos dataset.
 
@@ -105,12 +126,29 @@ def _apply_filters(shots: pd.DataFrame) -> pd.DataFrame:
     detailed_positions = sorted(p for p in detailed_present if p != "Inconnu")
     if "Inconnu" in detailed_present:
         detailed_positions.append("Inconnu")
+    dominance = _detailed_position_dominance(shots)
+
+    def _detailed_position_label(position: str) -> str:
+        if position == "Inconnu":
+            return "Inconnu (hors couverture StatsBomb)"
+        top_player, share = dominance.get(position, ("", 0.0))
+        if share >= _DETAILED_POSITION_DOMINANCE_THRESHOLD:
+            return f"{position} ⚠️ {top_player} {share:.0%}"
+        return position
+
     selected_detailed_positions = st.sidebar.multiselect(
-        "Poste detaille (StatsBomb)", detailed_positions, default=detailed_positions
+        "Poste detaille (StatsBomb)",
+        detailed_positions,
+        default=detailed_positions,
+        format_func=_detailed_position_label,
     )
-    st.sidebar.caption(
-        "Granularite ailier/lateral/numero 9 - couverture partielle "
-        "(95 matchs StatsBomb sur 397, saisons 2015/16, 2021/22, 2022/23)."
+    st.sidebar.warning(
+        "Granularite ailier/lateral/numero 9 : donnees StatsBomb limitees a "
+        "3 saisons sur 12 (2015/16, 2021/22, 2022/23) - plafond du dataset "
+        "ouvert (aucune autre saison Ligue 1 ou match PSG en Champions "
+        "League n'y est publie), pas une limite d'ingestion. ⚠️ = poste "
+        "domine a plus de 60% par un seul joueur sur ces 3 saisons : a lire "
+        "comme un profil individuel, pas une tendance generale."
     )
 
     goal_filter = st.sidebar.radio("But", _GOAL_FILTER_OPTIONS, index=0)
