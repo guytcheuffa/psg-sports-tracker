@@ -262,6 +262,29 @@ def _render_leaderboard(shots: pd.DataFrame, top_n: int = 10) -> None:
     st.dataframe(by_player, width="stretch")
 
 
+def _render_season_trend(shots: pd.DataFrame) -> None:
+    """Evolution buts reels vs xG cumule saison par saison (barres groupees, ordre chronologique).
+
+    Exploite les 12 saisons du corpus (StatsBomb historique + backfill
+    Understat) - jusqu'ici seulement accessibles via le filtre "Saison" de
+    la sidebar, sans vue d'ensemble de la tendance dans le temps.
+    """
+    by_season = (
+        shots.groupby("season")
+        .agg(tirs=("event_id", "count"), buts=("is_goal", "sum"), xg=("xg_pred", "sum"))
+        .sort_index()  # labels "YYYY/YYYY" a largeur fixe : tri lexicographique = chronologique
+    )
+    by_season["buts_moins_xg"] = by_season["buts"] - by_season["xg"]
+    by_season = by_season.round({"xg": 2, "buts_moins_xg": 2})
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(x=by_season.index, y=by_season["buts"], name="Buts reels"))
+    fig.add_trace(go.Bar(x=by_season.index, y=by_season["xg"], name="xG cumule"))
+    _themed_figure(fig, barmode="group", height=380, xaxis_tickangle=-30)
+    st.plotly_chart(fig, width="stretch")
+    st.dataframe(by_season, width="stretch")
+
+
 def _render_player_profile(shots: pd.DataFrame) -> None:
     """Carte de profil pour un joueur choisi : photo/monogramme, stats, mini-shotmap."""
     if shots.empty:
@@ -620,6 +643,9 @@ def main() -> None:
     with tab_overview:
         st.subheader("Shotmap")
         _render_shotmap(filtered)
+
+        st.subheader("Evolution par saison")
+        _render_season_trend(filtered)
 
     with tab_leaderboard:
         st.subheader("Buts reels vs xG cumule (top 10 tireurs)")
