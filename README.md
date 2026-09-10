@@ -62,11 +62,23 @@ probabilite de but (xG), et dashboard interactif.
     uniquement puis appliquee au test, pour eviter une fuite d'information (sinon les tirs de
     test contribuent eux-memes a definir le pied dominant utilise pour les evaluer).
 - **Stockage** : DuckDB, transformations SQL typees (cle composite `source + match_id`)
-- **ML** : XGBoost (classification binaire xG), SHAP (explicabilite)
-- **Visualisation** : Streamlit + Plotly — shotmap (demi-terrain, taille = xG, couleur = but/non-but),
-  classement buts reels vs xG cumule par joueur, explicabilite SHAP d'un tir choisi. Teste via
-  `streamlit.testing.v1.AppTest` (`tests/test_app.py`, base + modele synthetiques en base
-  temporaire, pas de dependance aux vraies donnees en CI).
+- **ML** : XGBoost (classification binaire xG), SHAP (explicabilite). Features : geometrie
+  (distance au but, angle de tir), technique (tete, pied dominant), contexte (type de tir en
+  one-hot). *Choix deliberement ecarte* : StatsBomb expose aussi `technique`, `first_time`,
+  `play_pattern` et surtout `freeze_frame` (position de tous les joueurs au moment du tir, la
+  feature qui distingue generalement un xG amateur d'un xG professionnel) — non integres car
+  disponibles uniquement sur les 3 saisons StatsBomb (memes limites que ci-dessus) et parce que
+  `freeze_frame` demanderait un feature engineering geometrique nettement plus complexe pour un
+  gain limite a une fraction du dataset. Detaille dans l'onglet "Methodologie" du dashboard.
+- **Visualisation** : Streamlit + Plotly, six onglets — vue d'ensemble (shotmap demi-terrain,
+  taille = xG, couleur = but/non-but, + evolution buts reels vs xG par saison), classement buts
+  reels vs xG cumule par joueur (tri au choix : buts reels ou volume de tirs), profil joueur,
+  explicabilite SHAP d'un tir choisi (+ heatmap de densite contextuelle), diagnostic du modele
+  (courbe ROC + courbe de calibration sur le jeu de test hold-out reel, pas recalculees a partir du
+  modele final reentraine sur 100% des donnees, ce qui serait circulaire), et methodologie (sources,
+  pipeline, features du modele, limites connues — centralise dans le dashboard plutot que laisse
+  uniquement dans ce README). Teste via `streamlit.testing.v1.AppTest` (`tests/test_app.py`, base +
+  modele synthetiques en base temporaire, pas de dependance aux vraies donnees en CI).
 - **DevOps** : Docker (multi-copy avec README.md requis par `pyproject.toml`), GitHub Actions
   (lint/mypy/pytest sur `src`+`scripts`+`tests`), pytest + pytest-cov
 
@@ -130,6 +142,10 @@ Projet en developpement actif (vitrine technique Data Science / Data Engineering
 - [x] Entrainement reel du modele xG sur les 6283 tirs combines (`scripts/train.py`),
       ROC-AUC 0.772 sur le jeu de test (split sans fuite train/test)
 - [x] Jour 3 : dashboard Streamlit (shotmap, classement xG, explicabilite SHAP), teste via AppTest
+- [x] Correction d'une fuite train/test sur `is_strong_foot` (fit train uniquement / transform
+      train+test) + onglet Diagnostic du modele (ROC, calibration, sur predictions hold-out reelles)
+- [x] Onglet Methodologie (sources, dedup, pipeline, features, limites connues) + classement a tri
+      au choix (buts reels / volume de tirs)
 - [x] CI/CD : GitHub Actions (ruff + mypy strict + pytest/coverage sur `src`+`scripts`+`tests`)
 - [ ] Docker : configuration ecrite et relue, mais pas buildee dans cet environnement (pas de
       Docker disponible ici) — a valider en local avant publication

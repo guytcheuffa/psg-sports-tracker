@@ -47,7 +47,7 @@ _SHOTS_QUERY = """
 # l'ingestion de futures saisons revele de nouveaux doublons/rattachements
 # manques (rejouer les deux rapprochements difflib sur les noms distincts
 # en base).
-_PLAYER_NAME_ALIASES: dict[str, str] = {
+PLAYER_NAME_ALIASES: dict[str, str] = {
     "Achraf Hakimi Mouh": "Achraf Hakimi",
     "Ander Herrera Agüera": "Ander Herrera",
     "Ángel Fabián Di María Hernández": "Ángel Di María",
@@ -126,7 +126,7 @@ def load_player_positions(db_path: str) -> pd.DataFrame:
     if raw.empty:
         return pd.DataFrame(columns=["player_name", "position"])
 
-    raw["player_name"] = raw["player_name"].replace(_PLAYER_NAME_ALIASES)
+    raw["player_name"] = raw["player_name"].replace(PLAYER_NAME_ALIASES)
     raw["position"] = raw["position_raw"].map(_primary_position)
     raw = raw.dropna(subset=["position"])
     if raw.empty:
@@ -191,7 +191,7 @@ def load_detailed_positions(db_path: str) -> pd.DataFrame:
     if raw.empty:
         return pd.DataFrame(columns=["player_name", "position_detailed"])
 
-    raw["player_name"] = raw["player_name"].replace(_PLAYER_NAME_ALIASES)
+    raw["player_name"] = raw["player_name"].replace(PLAYER_NAME_ALIASES)
     raw["position_detailed"] = raw["position_detailed"].map(_DETAILED_POSITION_LABELS)
     raw = raw.dropna(subset=["position_detailed"])
     if raw.empty:
@@ -228,7 +228,7 @@ def load_shots_with_xg(db_path: str, model_path: str) -> pd.DataFrame:
     if shots.empty:
         return shots
 
-    shots["player_name"] = shots["player_name"].replace(_PLAYER_NAME_ALIASES)
+    shots["player_name"] = shots["player_name"].replace(PLAYER_NAME_ALIASES)
 
     positions = load_player_positions(db_path)
     shots = shots.merge(positions, on="player_name", how="left")

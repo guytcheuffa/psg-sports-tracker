@@ -1,10 +1,12 @@
 """Point d'entree de l'application Streamlit : dashboard xG du PSG.
 
-Cinq onglets : vue d'ensemble (KPIs + shotmap), classement buts reels vs
+Six onglets : vue d'ensemble (KPIs + shotmap), classement buts reels vs
 xG cumule par joueur, profil d'un joueur (carte avec photo/monogramme en
-filigrane), explicabilite SHAP d'un tir individuel selectionne, et
-diagnostic du modele (courbe ROC + courbe de calibration sur le jeu de
-test hold-out reel, cf. `models/eval_report.py`).
+filigrane), explicabilite SHAP d'un tir individuel selectionne, diagnostic
+du modele (courbe ROC + courbe de calibration sur le jeu de test hold-out
+reel, cf. `models/eval_report.py`) et methodologie (sources, pipeline,
+features du modele, limites connues - centralise ici plutot que dans un
+README a lire a cote, cf. `_render_methodology`).
 """
 
 from __future__ import annotations
@@ -20,6 +22,7 @@ from sklearn.metrics import roc_curve
 
 from psg_tracker.app import theme
 from psg_tracker.app.data_loader import (
+    PLAYER_NAME_ALIASES,
     get_shap_explainer,
     load_eval_report_cached,
     load_model,
@@ -27,6 +30,7 @@ from psg_tracker.app.data_loader import (
 )
 from psg_tracker.app.pitch import half_pitch_figure
 from psg_tracker.config import settings
+from psg_tracker.features.engineering import select_feature_columns
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _DB_PATH = (
@@ -243,12 +247,25 @@ def _render_shotmap(shots: pd.DataFrame, height: int = 520) -> None:
     st.plotly_chart(fig, width="stretch")
 
 
+_LEADERBOARD_SORT_OPTIONS = {"Buts reels": "buts", "Tirs (volume)": "tirs"}
+
+
 def _render_leaderboard(shots: pd.DataFrame, top_n: int = 10) -> None:
-    """Classement buts reels vs xG cumule par joueur, trie par volume de tirs."""
+    """Classement buts reels vs xG cumule par joueur, tri au choix (buts ou volume de tirs).
+
+    "Buts reels" par defaut (ce qu'on attend intuitivement d'un
+    "classement"), "Tirs (volume)" pour retrouver qui a le plus tire (ex.
+    Mbappe, qui n'est pas forcement le meilleur finisseur du groupe).
+    """
+    sort_label = st.radio(
+        "Trier par", list(_LEADERBOARD_SORT_OPTIONS.keys()), horizontal=True
+    )
+    sort_column = _LEADERBOARD_SORT_OPTIONS[sort_label]
+
     by_player = (
         shots.groupby("player_name")
         .agg(tirs=("event_id", "count"), buts=("is_goal", "sum"), xg=("xg_pred", "sum"))
-        .sort_values("tirs", ascending=False)
+        .sort_values(sort_column, ascending=False)
         .head(top_n)
     )
     by_player["buts_moins_xg"] = by_player["buts"] - by_player["xg"]
@@ -609,6 +626,158 @@ def _render_model_diagnostics(model_path: Path) -> None:
     )
 
 
+_FEATURE_DESCRIPTIONS: dict[str, str] = {
+    "distance_to_goal": "Distance euclidienne entre le point de tir et le centre du but (yards).",
+    "shot_angle_rad": (
+        "Angle (radians) sous lequel le tireur voit le but - formule arctan2 standard "
+        "(Soccermatics/FriendsOfTracking)."
+    ),
+    "is_header": "Tir de la tete (booleen).",
+    "is_strong_foot": (
+        "Tir pris du pied dominant du joueur. Mapping joueur -> pied dominant calcule sur le "
+        "train uniquement puis applique au train et au test (cf. section \"Limites connues\")."
+    ),
+}
+_FEATURE_KINDS: dict[str, str] = {
+    "distance_to_goal": "Geometrie",
+    "shot_angle_rad": "Geometrie",
+    "is_header": "Technique",
+    "is_strong_foot": "Technique",
+}
+
+
+def _feature_table(shots: pd.DataFrame) -> pd.DataFrame:
+    """Table descriptive des features du modele (nom, type, description).
+
+    `shots` (tel que renvoye par `load_shots_with_xg`) contient deja les
+    colonnes de features (`build_feature_matrix` y a ete applique a l'ingestion
+    dans le dashboard) : `select_feature_columns` recupere donc la liste
+    reelle utilisee par le modele charge, `situation_*` dynamiques comprises,
+    sans avoir a la dupliquer/deviner ici.
+    """
+    rows = []
+    for column in select_feature_columns(shots):
+        if column in _FEATURE_DESCRIPTIONS:
+            description = _FEATURE_DESCRIPTIONS[column]
+            kind = _FEATURE_KINDS[column]
+        else:
+            situation = column.removeprefix("situation_")
+            description = f'Indicatrice one-hot : tir de type "{situation}".'
+            kind = "Contexte"
+        rows.append({"Feature": column, "Type": kind, "Description": description})
+    return pd.DataFrame(rows)
+
+
+def _render_methodology(shots: pd.DataFrame) -> None:
+    """Onglet Methodologie : sources, dedup, pipeline, features et limites connues.
+
+    Recu comme demande explicite plutot que de laisser cette information
+    eparpillee entre le code et le README ("un onglet qui centralise sources,
+    features du modele et limites connues ferait plus serieux qu'un README
+    qu'on doit aller lire a cote"). `shots` recu ici est le dataset complet,
+    non filtre par la sidebar : la methodologie decrit le pipeline dans son
+    ensemble, pas la selection courante.
+    """
+    n_shots = len(shots)
+    n_matches = shots[["source", "match_date"]].drop_duplicates().shape[0]
+    n_seasons = int(shots["season"].nunique())
+    n_seasons_statsbomb = int(shots.loc[shots["source"] == "statsbomb", "season"].nunique())
+    n_aliases = len(PLAYER_NAME_ALIASES)
+
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Tirs en base", f"{n_shots:,}".replace(",", " "))
+    col2.metric("Matchs", n_matches)
+    col3.metric("Saisons", n_seasons)
+    col4.metric(
+        "Alias joueurs harmonises",
+        n_aliases,
+        help=(
+            "Meme joueur, nom different selon la source (ex. nom complet StatsBomb vs nom "
+            "d'usage Understat) - harmonise pour eviter les doublons dans le classement et "
+            "le profil joueur."
+        ),
+    )
+
+    st.markdown("##### Sources de donnees")
+    by_source = shots.groupby("source").agg(
+        tirs=("event_id", "count"),
+        matchs=("match_id", "nunique"),
+        saisons=("season", "nunique"),
+    )
+    by_source.index = by_source.index.map(lambda s: _SOURCE_LABELS.get(s, s))
+    by_source = by_source.rename(
+        columns={"tirs": "Tirs", "matchs": "Matchs", "saisons": "Saisons"}
+    )
+    st.dataframe(by_source, width="stretch")
+    st.caption(
+        f"**StatsBomb Open Data** (historique) : couverture plafonnee a {n_seasons_statsbomb} "
+        f"saison(s) sur {n_seasons} pour PSG/Ligue 1 (2015/16, 2021/22, 2022/23) et 0 match de "
+        "Ligue des Champions publie - limite du dataset ouvert lui-meme (verifie via l'API "
+        "StatsBomb), pas un choix ou un gap d'ingestion.  \n"
+        "**Understat** (scraping public) : comble les saisons non couvertes par StatsBomb, "
+        "toutes disponibles - seule source du poste principal (filtre \"Poste\", 4 categories)."
+    )
+
+    st.markdown("##### Deduplication inter-sources")
+    st.caption(
+        "3 saisons se recoupent entre StatsBomb et Understat : sans filtrage, un meme match "
+        "reel serait ingere sous deux identifiants differents (un par source) et compte deux "
+        "fois (tirs/buts doubles sur ces saisons). Regle retenue : StatsBomb est prioritaire "
+        "(plus riche en evenements), Understat ne comble que les dates ou StatsBomb n'a aucun "
+        "match - avec une tolerance de +/-1 jour sur la date de coup d'envoi (des ecarts d'un "
+        "jour entre sources ont ete constates empiriquement, vraisemblablement un artefact de "
+        "fuseau horaire sur les matchs en soiree)."
+    )
+
+    st.markdown("##### Pipeline")
+    st.caption(
+        "Ingestion (StatsBomb Open Data + scraping Understat) → stockage DuckDB → feature "
+        "engineering partage train/inference → modele XGBoost (classification binaire, "
+        "probabilite de but) → explicabilite SHAP (TreeExplainer) → dashboard "
+        "Streamlit/Plotly. Tests automatises (pytest) et CI sur l'ensemble du pipeline."
+    )
+
+    st.markdown("##### Features du modele")
+    st.dataframe(_feature_table(shots), width="stretch", hide_index=True)
+    st.caption(
+        "Les colonnes `situation_*` sont generees dynamiquement (one-hot) a partir des "
+        "categories de `shot_type` presentes dans les donnees : leur nombre exact peut donc "
+        "varier legerement selon les types de tir observes dans la selection ingeree."
+    )
+
+    with st.expander("Limites connues et choix deliberes"):
+        st.markdown(
+            "**Poste detaille limite a 3 saisons sur 12 (StatsBomb).** Deja signale dans le "
+            "filtre sidebar : certains postes fins (ex. ailier droit) ne refletent en realite "
+            "qu'un seul joueur sur cette fenetre reduite - a lire comme un profil individuel, "
+            "pas une tendance generale."
+        )
+        st.markdown(
+            "**Fuite train/test corrigee (`is_strong_foot`).** Le pied dominant d'un joueur "
+            "etait initialement calcule sur l'ensemble des donnees avant le split train/test, "
+            "ce qui laissait filtrer de l'information du test vers le train. Corrige via une "
+            "separation fit (train uniquement, `compute_preferred_foot_map`) / transform "
+            "(train et test, `apply_preferred_foot_feature`). L'AUC hold-out honnete qui en "
+            "resulte est legerement plus basse qu'avant correction (cf. onglet Diagnostic)."
+        )
+        st.markdown(
+            "**Features enrichies StatsBomb non retenues (deliberement).** Le JSON brut "
+            "StatsBomb expose bien plus que ce qui est utilise ici : `technique` (tir normal, "
+            "volee, lob, retourne...), `first_time` (controle ou frappe directe), "
+            "`play_pattern` (contre-attaque, sur corner, apres recuperation...) et surtout "
+            "`freeze_frame` - la position de tous les joueurs, dont le gardien, au moment du "
+            "tir, ce qui distingue generalement un xG amateur d'un xG professionnel. "
+            f"Decision : ne pas les integrer, pour deux raisons combinees - disponibles "
+            f"uniquement sur les {n_seasons_statsbomb} saisons StatsBomb (contre {n_seasons} "
+            "au total, meme limite que le poste detaille ci-dessus), et `freeze_frame` en "
+            "particulier demanderait un feature engineering geometrique significativement "
+            "plus complexe (distance/angle aux defenseurs et au gardien les plus proches) "
+            "pour un gain qui ne beneficierait qu'a une fraction du dataset. Complexite jugee "
+            "disproportionnee par rapport au benefice sur ce projet - un choix de perimetre "
+            "assume, pas un oubli."
+        )
+
+
 def main() -> None:
     """Lance le dashboard Streamlit."""
     st.set_page_config(page_title="PSG Sports Tracker", layout="wide", page_icon="⚽")
@@ -630,14 +799,17 @@ def main() -> None:
     filtered = _apply_filters(shots)
     _render_kpis(filtered)
 
-    tab_overview, tab_leaderboard, tab_player, tab_shap, tab_diagnostics = st.tabs(
-        [
-            "Vue d'ensemble",
-            "Classement",
-            "Profil joueur",
-            "Explicabilite (SHAP)",
-            "Diagnostic du modele",
-        ]
+    tab_overview, tab_leaderboard, tab_player, tab_shap, tab_diagnostics, tab_methodology = (
+        st.tabs(
+            [
+                "Vue d'ensemble",
+                "Classement",
+                "Profil joueur",
+                "Explicabilite (SHAP)",
+                "Diagnostic du modele",
+                "Methodologie",
+            ]
+        )
     )
 
     with tab_overview:
@@ -662,6 +834,10 @@ def main() -> None:
     with tab_diagnostics:
         st.subheader("Diagnostic du modele")
         _render_model_diagnostics(_MODEL_PATH)
+
+    with tab_methodology:
+        st.subheader("Methodologie")
+        _render_methodology(shots)
 
     st.markdown(theme.app_footer_html(), unsafe_allow_html=True)
 

@@ -104,3 +104,49 @@ def test_dashboard_renders_without_exception(isolated_settings: None) -> None:
 
     assert not at.exception, [str(e) for e in at.exception]
     assert len(at.metric) >= 4  # KPIs : tirs, buts reels, xG cumule, buts-xG
+    assert len(at.tabs) == 6
+
+
+def test_leaderboard_sort_toggle_changes_order(isolated_settings: None) -> None:
+    """Le classement propose deux tris au choix (buts reels / volume de tirs), pas un seul figé."""
+    from streamlit.testing.v1 import AppTest
+
+    app_path = Path(__file__).parent.parent / "src/psg_tracker/app/main.py"
+    at = AppTest.from_file(str(app_path))
+    at.run(timeout=60)
+    assert not at.exception, [str(e) for e in at.exception]
+
+    leaderboard_tab = at.tabs[1]
+    (radio,) = leaderboard_tab.radio
+    assert radio.options == ["Buts reels", "Tirs (volume)"]
+    assert radio.value == "Buts reels"  # defaut
+
+    (dataframe,) = leaderboard_tab.dataframe
+    by_buts = dataframe.value["buts"].tolist()
+    assert by_buts == sorted(by_buts, reverse=True)
+
+    radio.set_value("Tirs (volume)").run(timeout=60)
+    assert not at.exception, [str(e) for e in at.exception]
+
+    leaderboard_tab = at.tabs[1]
+    (dataframe,) = leaderboard_tab.dataframe
+    by_tirs = dataframe.value["tirs"].tolist()
+    assert by_tirs == sorted(by_tirs, reverse=True)
+
+
+def test_methodology_tab_renders_sources_and_features(isolated_settings: None) -> None:
+    """L'onglet Methodologie centralise KPIs, tableau des sources et table des features."""
+    from streamlit.testing.v1 import AppTest
+
+    app_path = Path(__file__).parent.parent / "src/psg_tracker/app/main.py"
+    at = AppTest.from_file(str(app_path))
+    at.run(timeout=60)
+    assert not at.exception, [str(e) for e in at.exception]
+
+    methodology_tab = at.tabs[5]
+    assert len(methodology_tab.metric) == 4  # tirs, matchs, saisons, alias joueurs
+    assert len(methodology_tab.dataframe) == 2  # sources + features du modele
+    assert len(methodology_tab.expander) == 1  # limites connues et choix deliberes
+
+    feature_table = methodology_tab.dataframe[1].value
+    assert "is_strong_foot" in feature_table["Feature"].tolist()
