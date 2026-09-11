@@ -149,3 +149,28 @@ Projet en developpement actif (vitrine technique Data Science / Data Engineering
 - [x] CI/CD : GitHub Actions (ruff + mypy strict + pytest/coverage sur `src`+`scripts`+`tests`)
 - [x] Docker : build + lancement reels valides en local (`docker compose up --build`), dashboard
       fonctionnel sur `localhost:8501` (theme + donnees corrects)
+
+## Prochaines etapes
+
+Ameliorations identifiees mais deliberement laissees hors scope de cette premiere version, pour
+rester concentre sur la profondeur du pipeline data/modele plutot que sur l'automatisation :
+
+- **Scraping quotidien automatise (GitHub Actions)** : aujourd'hui, l'ingestion Understat est
+  declenchee manuellement (`python scripts/ingest.py understat ...`) - le nom du projet reflete
+  l'intention ("live" au sens "saison en cours", pas "temps reel"), pas encore un rafraichissement
+  automatique. Prochaine etape : un workflow `schedule` (cron quotidien) qui installe les deps,
+  relance `scripts/ingest.py understat --season <saison en cours>`, puis commit + push
+  automatiquement le fichier DuckDB mis a jour (`GITHUB_TOKEN` par defaut). Question de design
+  ouverte a trancher avant implementation : la pertinence d'un commit "bot" quotidien sur un
+  fichier binaire qui grossit progressivement (vs. par ex. un stockage externe versionne).
+- **Reentrainement periodique du modele** : decouple volontairement du scraping quotidien - un
+  seul jour de nouveaux tirs ne fait pas bouger un ROC-AUC de facon statistiquement significative.
+  Piste : un reentrainement (`scripts/train.py`) au rythme de la saison (ex. mensuel, ou apres
+  chaque trève internationale) plutot qu'a chaque ingestion.
+- **Deploiement continu du dashboard** : avec le scraping automatise ci-dessus, un deploiement sur
+  une plateforme qui se redeploie a chaque push (ex. Streamlit Community Cloud) permettrait aux
+  visiteurs de voir des donnees a jour sans etape manuelle (`git pull` + relance locale).
+
+Ces trois points sont techniquement simples individuellement ; ils ont ete documentes ici comme
+axes d'evolution plutot qu'implementes, pour prioriser la profondeur du pipeline existant (dedup
+inter-sources, correction de fuite train/test, explicabilite SHAP, etc.) dans le temps disponible.
