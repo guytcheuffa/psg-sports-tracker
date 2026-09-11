@@ -147,7 +147,7 @@ def _apply_filters(shots: pd.DataFrame) -> pd.DataFrame:
             return "Inconnu (hors couverture StatsBomb)"
         top_player, share = dominance.get(position, ("", 0.0))
         if share >= _DETAILED_POSITION_DOMINANCE_THRESHOLD:
-            return f"{position} ⚠️ {top_player} {share:.0%}"
+            return f"{position} * {top_player} {share:.0%}"
         return position
 
     selected_detailed_positions = st.sidebar.multiselect(
@@ -156,21 +156,9 @@ def _apply_filters(shots: pd.DataFrame) -> pd.DataFrame:
         default=detailed_positions,
         format_func=_detailed_position_label,
     )
-    st.sidebar.markdown(
-        theme.sidebar_note_html(
-            icon="📊",
-            title="Poste detaille : couverture partielle",
-            body=(
-                "Donnees StatsBomb limitees a 3 saisons sur 12 (2015/16, "
-                "2021/22, 2022/23) — plafond du dataset ouvert (aucune autre "
-                "saison Ligue 1 ni match PSG en Champions League n'y est "
-                "publie), pas une limite d'ingestion. <strong>⚠️</strong> sur "
-                "une option = poste domine a plus de 60% par un seul joueur "
-                "sur ces 3 saisons : a lire comme un profil individuel, pas "
-                "une tendance generale."
-            ),
-        ),
-        unsafe_allow_html=True,
+    st.sidebar.caption(
+        "* = poste domine a plus de 60% par un seul joueur (couverture StatsBomb "
+        "partielle) - detail complet dans l'onglet \"Methodologie\"."
     )
 
     goal_filter = st.sidebar.radio("But", _GOAL_FILTER_OPTIONS, index=0)
@@ -203,9 +191,9 @@ def _render_kpis(shots: pd.DataFrame) -> None:
     delta = total_goals - total_xg
 
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("🎯 Tirs", f"{total_shots:,}".replace(",", " "))
-    col2.metric("⚽ Buts reels", total_goals)
-    col3.metric("📈 xG cumule", f"{total_xg:.1f}")
+    col1.metric("Tirs", f"{total_shots:,}".replace(",", " "))
+    col2.metric("Buts reels", total_goals)
+    col3.metric("xG cumule", f"{total_xg:.1f}")
     col4.metric(
         "Efficacite (buts vs xG)",
         f"{total_goals} buts",
@@ -363,7 +351,7 @@ def _render_shot_context_heatmap(shots: pd.DataFrame, selected_index: int) -> No
     """
     selected = shots.loc[selected_index]
     is_goal = bool(selected["is_goal"])
-    outcome_label = "⚽ BUT" if is_goal else "❌ Pas de but"
+    outcome_label = "BUT" if is_goal else "Pas de but"
     outcome_annotation = {
         "x": selected["loc_x"],
         "y": selected["loc_y"],
@@ -478,7 +466,7 @@ def _render_shot_explainer(shots: pd.DataFrame, model_path: Path) -> None:
 
     col_xg, col_outcome = st.columns(2)
     col_xg.metric("xG predit pour ce tir", f"{predicted_xg:.2f}")
-    col_outcome.metric("Resultat reel", "⚽ But" if is_goal else "❌ Pas de but")
+    col_outcome.markdown(theme.outcome_badge_html(is_goal), unsafe_allow_html=True)
 
     fig = go.Figure(
         go.Bar(

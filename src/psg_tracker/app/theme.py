@@ -172,6 +172,23 @@ def inject_global_css() -> str:
 }}
 [data-testid="stMetricLabel"] {{ color: {TEXT_MUTED} !important; }}
 
+/* Carte "resultat reel" (onglet SHAP) : meme habillage que st.metric ci-dessus,
+   mais en markdown/HTML custom pour pouvoir colorer la valeur selon but/non-but
+   (badge texte, remplace l'ancien libelle a base d'emoji ⚽/❌). */
+.outcome-metric-card {{
+    background: linear-gradient(160deg, {NAVY} 0%, {NAVY_DARK} 100%);
+    border: 1px solid {NAVY_LIGHT};
+    border-radius: 12px;
+    padding: 14px 16px 10px 16px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+}}
+.outcome-metric-card.is-goal {{ border-top: 3px solid {GOLD}; }}
+.outcome-metric-card.is-no-goal {{ border-top: 3px solid {NAVY_LIGHT}; }}
+.outcome-metric-label {{ color: {TEXT_MUTED}; font-size: 0.8rem; margin-bottom: 4px; }}
+.outcome-metric-value {{ font-size: 1.9rem; font-weight: 700; }}
+.outcome-metric-value.is-goal {{ color: {GOLD}; }}
+.outcome-metric-value.is-no-goal {{ color: {TEXT}; }}
+
 /* Onglets */
 button[data-baseweb="tab"] {{ color: {TEXT_MUTED}; font-weight: 600; }}
 button[data-baseweb="tab"][aria-selected="true"] {{ color: {TEXT} !important; }}
@@ -488,6 +505,24 @@ def sidebar_badges_html(labels: list[str]) -> str:
     """Ligne de badges pour la sidebar (ex. sources de donnees actives)."""
     badges = "".join(f'<span class="sidebar-badge">{label}</span>' for label in labels)
     return f'<div class="sidebar-badge-row">{badges}</div>'
+
+
+def outcome_badge_html(is_goal: bool) -> str:
+    """Carte 'resultat reel' d'un tir (onglet SHAP), coloree selon but/non-but.
+
+    Remplace un libelle a base d'emoji (⚽ But / ❌ Pas de but) : meme fonction
+    (identifier vite l'issue du tir) mais rendu texte/couleur, coherent avec
+    le reste de la charte (or = positif, deja utilise pour les contributions
+    SHAP favorables et les badges de la banniere).
+    """
+    state = "is-goal" if is_goal else "is-no-goal"
+    label = "But" if is_goal else "Pas de but"
+    return (
+        f'<div class="outcome-metric-card {state}">'
+        f'<div class="outcome-metric-label">Resultat reel</div>'
+        f'<div class="outcome-metric-value {state}">{label}</div>'
+        "</div>"
+    )
 
 
 def sidebar_note_html(title: str, body: str, icon: str = "ℹ️") -> str:
