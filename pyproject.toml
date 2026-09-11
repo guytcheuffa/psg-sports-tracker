@@ -59,7 +59,10 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+# "scripts" en plus de "src" : permet de tester scripts/ingest.py et
+# scripts/train.py (logique d'orchestration/dedup) sans les transformer en
+# package installe - ce sont des points d'entree CLI, pas du code de librairie.
+pythonpath = ["src", "scripts"]
 
 [tool.coverage.run]
 # AppTest (test_app.py) execute le script Streamlit dans un thread dedie

@@ -7,6 +7,10 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY src/ src/
 COPY scripts/ scripts/
+# Theme sombre custom (couleurs du club) + mode headless : sans ce dossier,
+# le dashboard containerise retombe sur le theme clair par defaut de
+# Streamlit, en contradiction avec toute l'identite visuelle du projet.
+COPY .streamlit/ .streamlit/
 
 RUN pip install --no-cache-dir -e .
 

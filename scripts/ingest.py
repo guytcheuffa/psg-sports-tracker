@@ -290,6 +290,12 @@ def ingest_understat_seasons(
     qui ne l'utilisait que pour la saison "live". Boucle saison par saison,
     avec une pause polie entre chaque appel `getTeamData`.
     """
+    if not seasons:
+        # Ex: --from-season poste apres la saison en cours (erreur de saisie).
+        # Sans ce garde-fou, `seasons[0]`/`seasons[-1]` plus bas levent IndexError.
+        logger.warning("ingest_understat_seasons: liste de saisons vide, rien a faire")
+        return
+
     total_matches = 0
     total_shots = 0
     for season in seasons:
