@@ -125,9 +125,9 @@ Le conteneur installe le package (`pip install -e .`, deps incluses dans `pyproj
 `streamlit run src/psg_tracker/app/main.py` sur le port 8501. Le dossier `data/` est monte en
 volume (`docker-compose.yml`) : ingerer/entrainer en local d'abord (commandes ci-dessus) pour que
 le dashboard ait des donnees a afficher, ou lancer `scripts/ingest.py`/`scripts/train.py` dans le
-conteneur (`docker compose run app python scripts/ingest.py ...`). *Configuration non verifiee par
-un build reel dans cet environnement (Docker indisponible ici) : verifiee par relecture uniquement
-(le pipeline `pip install -e .` requiert `README.md`, present dans l'image via le Dockerfile).*
+conteneur (`docker compose run app python scripts/ingest.py ...`). *Build + lancement reels
+valides localement (`docker compose up --build`) : dashboard fonctionnel sur `localhost:8501`,
+theme sombre et donnees (montees via volume) correctement charges.*
 
 ## Statut
 
@@ -147,5 +147,5 @@ Projet en developpement actif (vitrine technique Data Science / Data Engineering
 - [x] Onglet Methodologie (sources, dedup, pipeline, features, limites connues) + classement a tri
       au choix (buts reels / volume de tirs)
 - [x] CI/CD : GitHub Actions (ruff + mypy strict + pytest/coverage sur `src`+`scripts`+`tests`)
-- [ ] Docker : configuration ecrite et relue, mais pas buildee dans cet environnement (pas de
-      Docker disponible ici) — a valider en local avant publication
+- [x] Docker : build + lancement reels valides en local (`docker compose up --build`), dashboard
+      fonctionnel sur `localhost:8501` (theme + donnees corrects)
