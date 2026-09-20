@@ -146,12 +146,30 @@ def inject_global_css() -> str:
     )
     return f"""
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+:root {{
+    --psg-font-body: 'Inter', -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+    --psg-font-display: 'Space Grotesk', 'Inter', Arial, sans-serif;
+}}
+
+html, body, .stApp, [class*="css"] {{ font-family: var(--psg-font-body); }}
+h1, h2, h3, .psg-hero-banner-content h1, .player-hero-content h2, .sidebar-brand h3 {{
+    font-family: var(--psg-font-display) !important;
+}}
+
 .stApp {{
     background:
         radial-gradient(1200px 600px at 15% -10%, {NAVY_LIGHT} 0%, transparent 60%),
         radial-gradient(1000px 500px at 110% 10%, {NAVY} 0%, transparent 55%),
         {texture_layer}{NAVY_DARK};
 }}
+
+/* Scrollbar discrete, coherente avec la charte (remplace la barre grise par defaut) */
+::-webkit-scrollbar {{ width: 10px; height: 10px; }}
+::-webkit-scrollbar-track {{ background: {NAVY_DARK}; }}
+::-webkit-scrollbar-thumb {{ background: {NAVY_LIGHT}; border-radius: 10px; }}
+::-webkit-scrollbar-thumb:hover {{ background: {GOLD}; }}
 
 [data-testid="stSidebar"] {{
     background: {NAVY_DARK};
@@ -161,36 +179,76 @@ def inject_global_css() -> str:
     color: {TEXT} !important;
 }}
 
-/* Cartes KPI (st.metric) */
+/* Widgets natifs Streamlit (select/slider/bouton) restyles pour ne pas trancher
+   avec le reste de la charte navy/or - sinon seul le "decor" est habille. */
+div[data-baseweb="select"] > div {{
+    background: {NAVY} !important;
+    border-color: {NAVY_LIGHT} !important;
+    border-radius: 10px !important;
+}}
+div[data-baseweb="popover"] li {{ background: {NAVY} !important; }}
+.stSlider [data-baseweb="slider"] > div > div {{ background: {NAVY_LIGHT} !important; }}
+.stSlider [role="slider"] {{ background: {GOLD} !important; border-color: {GOLD} !important; }}
+.stButton > button {{
+    background: linear-gradient(135deg, {RED} 0%, #B8050F 100%);
+    color: {TEXT};
+    border: none;
+    border-radius: 10px;
+    font-weight: 600;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}}
+.stButton > button:hover {{
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px rgba(227,6,19,0.35);
+    color: {TEXT};
+}}
+
+/* Cartes KPI (st.metric) - effet verre depoli + leger relief au survol */
 [data-testid="stMetric"] {{
-    background: linear-gradient(160deg, {NAVY} 0%, {NAVY_DARK} 100%);
-    border: 1px solid {NAVY_LIGHT};
+    background: linear-gradient(160deg, rgba(30,44,99,0.55) 0%, rgba(11,19,48,0.80) 100%);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,0.07);
     border-top: 3px solid {RED};
-    border-radius: 12px;
-    padding: 14px 16px 10px 16px;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+    border-radius: 14px;
+    padding: 16px 18px 12px 18px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.04);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}}
+[data-testid="stMetric"]:hover {{
+    transform: translateY(-3px);
+    box-shadow: 0 16px 34px rgba(0,0,0,0.40), 0 0 0 1px rgba(227,6,19,0.20);
 }}
 [data-testid="stMetricLabel"] {{ color: {TEXT_MUTED} !important; }}
 
-/* Carte "resultat reel" (onglet SHAP) : meme habillage que st.metric ci-dessus,
+/* Carte "resultat reel" (onglet SHAP) : meme habillage verre depoli que st.metric,
    mais en markdown/HTML custom pour pouvoir colorer la valeur selon but/non-but
    (badge texte, remplace l'ancien libelle a base d'emoji ⚽/❌). */
 .outcome-metric-card {{
-    background: linear-gradient(160deg, {NAVY} 0%, {NAVY_DARK} 100%);
-    border: 1px solid {NAVY_LIGHT};
-    border-radius: 12px;
-    padding: 14px 16px 10px 16px;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+    background: linear-gradient(160deg, rgba(30,44,99,0.55) 0%, rgba(11,19,48,0.80) 100%);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 14px;
+    padding: 16px 18px 12px 18px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.04);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }}
+.outcome-metric-card:hover {{ transform: translateY(-3px); }}
 .outcome-metric-card.is-goal {{ border-top: 3px solid {GOLD}; }}
 .outcome-metric-card.is-no-goal {{ border-top: 3px solid {NAVY_LIGHT}; }}
 .outcome-metric-label {{ color: {TEXT_MUTED}; font-size: 0.8rem; margin-bottom: 4px; }}
-.outcome-metric-value {{ font-size: 1.9rem; font-weight: 700; }}
+.outcome-metric-value {{
+    font-size: 1.9rem; font-weight: 700; font-family: var(--psg-font-display);
+}}
 .outcome-metric-value.is-goal {{ color: {GOLD}; }}
 .outcome-metric-value.is-no-goal {{ color: {TEXT}; }}
 
 /* Onglets */
-button[data-baseweb="tab"] {{ color: {TEXT_MUTED}; font-weight: 600; }}
+button[data-baseweb="tab"] {{
+    color: {TEXT_MUTED}; font-weight: 600; transition: color 0.15s ease;
+}}
+button[data-baseweb="tab"]:hover {{ color: {TEXT}; }}
 button[data-baseweb="tab"][aria-selected="true"] {{ color: {TEXT} !important; }}
 [data-baseweb="tab-highlight"] {{ background-color: {RED} !important; }}
 [data-baseweb="tab-border"] {{ background-color: {NAVY_LIGHT} !important; }}
@@ -325,6 +383,23 @@ button[data-baseweb="tab"][aria-selected="true"] {{ color: {TEXT} !important; }}
     color: {TEXT_MUTED};
     text-transform: uppercase;
     letter-spacing: 0.5px;
+}}
+
+/* Point "en direct" discret a cote du libelle sous le logo sidebar */
+.sidebar-live-dot {{
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: {GREEN};
+    margin-right: 5px;
+    box-shadow: 0 0 0 0 rgba(34,197,94,0.6);
+    animation: psg-live-pulse 2.2s ease-out infinite;
+}}
+@keyframes psg-live-pulse {{
+    0%   {{ box-shadow: 0 0 0 0 rgba(34,197,94,0.55); }}
+    70%  {{ box-shadow: 0 0 0 6px rgba(34,197,94,0); }}
+    100% {{ box-shadow: 0 0 0 0 rgba(34,197,94,0); }}
 }}
 
 .sidebar-section-title {{
@@ -495,7 +570,7 @@ def sidebar_brand_html() -> str:
     <img src="{logo_uri}" alt="Logo PSG"/>
     <div>
         <h3>PSG XG TRACKER</h3>
-        <p>Analytics tirs &amp; xG</p>
+        <p><span class="sidebar-live-dot"></span>Analytics tirs &amp; xG</p>
     </div>
 </div>
 """.strip()
@@ -600,7 +675,7 @@ def plotly_template() -> dict[str, object]:
     return {
         "paper_bgcolor": "rgba(0,0,0,0)",
         "plot_bgcolor": "rgba(0,0,0,0)",
-        "font": {"color": TEXT, "family": "Arial, sans-serif"},
+        "font": {"color": TEXT, "family": "Inter, Arial, sans-serif"},
         "colorway": [RED, GOLD, TEXT_MUTED, GREEN],
         "legend": {"font": {"color": TEXT}},
         "xaxis": {"gridcolor": NAVY_LIGHT, "zerolinecolor": NAVY_LIGHT},
