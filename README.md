@@ -1,3 +1,5 @@
+*[English version](README.en.md)*
+
 # PSG Sports Tracker
 
 Pipeline data engineering & data science autour des donnees evenementielles
